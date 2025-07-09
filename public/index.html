@@ -1,1 +1,195 @@
-<!DOCTYPE html><html><head><meta charset='utf-8'><title>Freepik Importer</title></head><body><h1>Welcome To Freepik Importer</h1></body></html>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Freepik Importer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f8f8f8;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #searchTerm {
+      padding: 8px;
+      width: 200px;
+    }
+    button {
+      padding: 8px 12px;
+      margin-left: 5px;
+      background-color: #1c73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #135dc2;
+    }
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 0px;
+      margin-top: 20px;
+      justify-items: center;
+    }
+    .image-card {
+      width: 160px;
+      height: 200px;
+      background: white;
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 6px;
+    }
+    .image-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .image-card img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 4px;
+    }
+    .image-card p {
+      font-size: 13px;
+      margin: 8px 0 5px;
+      height: 30px;
+      overflow: hidden;
+    }
+    .image-card input[type="checkbox"] {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      transform: scale(1.2);
+      z-index: 2;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Only for first-time install if needed -->
+  <a href="/api/auth?shop=yogireddy.myshopify.com">
+    <button style="padding: 12px 24px; font-size: 18px; background-color: green; color: white;">
+      ✅ Install Freepik App on Shopify
+    </button>
+  </a>
+
+  <h1>Freepik Images</h1>
+  <input type="text" id="searchTerm" placeholder="Enter keyword..." />
+  <button onclick="search()">Search</button>
+  <button onclick="prevPage()">⬅️ Prev</button>
+  <button onclick="nextPage()">Next ➡️</button>
+  <span id="pageNum">Page: 1</span>
+  <button onclick="addSelectedToShopify()">Add Selected to Shopify</button>
+
+  <div id="results" class="image-grid"></div>
+
+  <script>
+    let selectedImages = [];
+    let currentPage = 1;
+    let currentTerm = '';
+
+    const getRandomTerm = () => {
+      const terms = ["jersey", "sports", "tshirt", "pattern", "design", "abstract", "background"];
+      return terms[Math.floor(Math.random() * terms.length)];
+    };
+
+    async function search(page = 1) {
+      const input = document.getElementById('searchTerm');
+      const typedTerm = input.value.trim();
+      currentTerm = typedTerm || currentTerm || getRandomTerm();
+      input.value = currentTerm;
+
+      document.getElementById("pageNum").textContent = `Page: ${page}`;
+
+      const res = await fetch(`/api/search?term=${encodeURIComponent(currentTerm)}&page=${page}`);
+      const data = await res.json();
+      renderResults(data);
+      currentPage = page;
+    }
+
+    function renderResults(data) {
+      const results = document.getElementById('results');
+      results.innerHTML = '';
+      selectedImages = [];
+
+      if (data && data.data && Array.isArray(data.data)) {
+        data.data.forEach((item) => {
+          const card = document.createElement('div');
+          card.className = 'image-card';
+
+          const img = document.createElement('img');
+          img.src = item?.image?.source?.url || '';
+          img.alt = item.title || 'Image';
+
+          const title = document.createElement('p');
+          title.innerText = item.title || 'Untitled';
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.onchange = (e) => {
+            if (e.target.checked) {
+              selectedImages.push({
+                title: item.title,
+                imageUrl: item?.image?.source?.url
+              });
+            } else {
+              selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
+            }
+          };
+
+          card.appendChild(img);
+          card.appendChild(title);
+          card.appendChild(checkbox);
+          results.appendChild(card);
+        });
+      }
+    }
+
+    async function addSelectedToShopify() {
+      if (selectedImages.length === 0) {
+        alert('❌ Please select at least one image.');
+        return;
+      }
+
+      for (const item of selectedImages) {
+        const res = await fetch('/api/add-to-shopify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        });
+        const result = await res.json();
+        console.log(result.message);
+      }
+
+      alert(`✅ ${selectedImages.length} image(s) added to Shopify.`);
+      selectedImages = [];
+      document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+    }
+
+    function nextPage() {
+      search(currentPage + 1);
+    }
+
+    function prevPage() {
+      if (currentPage > 1) {
+        search(currentPage - 1);
+      }
+    }
+
+    window.onload = () => {
+      currentTerm = getRandomTerm();
+      search(1);
+    };
+  </script>
+</body>
+</html>
