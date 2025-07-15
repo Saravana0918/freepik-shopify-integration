@@ -155,26 +155,51 @@
       }
     }
 
-    async function addSelectedToShopify() {
-      if (selectedImages.length === 0) {
-        alert('❌ Please select at least one image.');
-        return;
-      }
+    function showToast(message, color = "green") {
+  const toast = document.createElement("div");
+  toast.textContent = message;
+  toast.style = `
+    position: fixed; top: 20px; right: 20px; z-index: 9999;
+    padding: 10px 18px; border-radius: 6px;
+    background:${color}; color:#fff; font-weight:600;
+    box-shadow:0 4px 12px rgba(0,0,0,.15);`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
 
-      for (const item of selectedImages) {
-        const res = await fetch('/api/add-to-shopify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item)
-        });
-        const result = await res.json();
-        console.log(result.message);
-      }
+async function addSelectedToShopify() {
+  if (selectedImages.length === 0) {
+    showToast("⚠️ Select at least one image", "orange");
+    return;
+  }
 
-      alert(`✅ ${selectedImages.length} image(s) added to Shopify.`);
-      selectedImages = [];
-      document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
-    }
+  // instant optimistic feedback
+  showToast(`✅ ${selectedImages.length} image(s) added to Shopify.`);
+
+  // background uploads
+  selectedImages.forEach((item) => {
+    fetch("/api/add-to-shopify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) {
+        showToast("❌ Upload failed for one image", "red");
+        console.error(data.error || "Unknown error");
+      }
+    })
+    .catch(err => {
+      showToast("❌ Upload failed for one image", "red");
+      console.error(err);
+    });
+  });
+
+  // clear selection in UI
+  selectedImages = [];
+  document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+}
 
     function nextPage() {
       search(currentPage + 1);
