@@ -169,18 +169,38 @@
   setTimeout(() => toast.remove(), 3000);
 }
 
+async function getExistingFreepikTags() {
+  const res = await fetch("/api/products");
+  const data = await res.json();
+  return data.tags || [];
+}
+
+async function cryptoDigest(input) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  const hashBuffer = await crypto.subtle.digest('MD5', data);
+  return [...new Uint8Array(hashBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function addSelectedToShopify() {
   if (selectedImages.length === 0) {
     showToast("⚠️ Select at least one image", "orange");
     return;
   }
 
-  let total = selectedImages.length;
+  const existingTags = await getExistingFreepikTags();
   let added = 0;
   let skipped = 0;
 
-  // background uploads
   await Promise.all(selectedImages.map(async (item) => {
+    const hash = await cryptoDigest(item.imageUrl);
+    const tag = `freepik-${hash}`;
+
+    if (existingTags.includes(tag)) {
+      skipped++;
+      return;
+    }
+
     const res = await fetch("/api/add-to-shopify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -189,9 +209,7 @@ async function addSelectedToShopify() {
 
     const data = await res.json();
 
-    if (data.duplicate) {
-      skipped++;
-    } else if (data.success) {
+    if (data.success) {
       added++;
     } else {
       showToast("❌ Upload failed for one image", "red");
@@ -199,11 +217,9 @@ async function addSelectedToShopify() {
     }
   }));
 
-  // clear selection in UI
   selectedImages = [];
   document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
 
-  // Show result toast
   if (added > 0) showToast(`✅ ${added} product(s) added to Shopify.`);
   if (skipped > 0) showToast(`⚠️ ${skipped} already existed and were skipped.`, "orange");
 }
