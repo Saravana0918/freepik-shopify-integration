@@ -30,223 +30,154 @@
       background-color: #135dc2;
     }
     .image-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      justify-content: center;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 16px;
       margin-top: 20px;
+      justify-items: center;
     }
     .image-card {
-      width: 240px;
       background: white;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      transition: transform 0.2s ease;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding-bottom: 15px;
-      position: relative;
-    }
-    .image-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      width: 160px;
     }
     .image-card img {
       width: 100%;
-      height: 200px;
-      object-fit: cover;
+      height: auto;
+      border-radius: 4px;
     }
     .image-card p {
       font-size: 14px;
-      margin: 10px 10px 0;
-      padding: 0 10px;
-      height: 40px;
-      overflow: hidden;
-      text-align: center;
+      margin: 6px 0 4px;
     }
-    .image-card input[type="checkbox"] {
-      position: absolute;
-      bottom: 10px;
-      right: 12px;
-      transform: scale(1.4);
-      cursor: pointer;
+    .status {
+      margin-top: 5px;
+      font-size: 12px;
+      color: green;
+      font-weight: bold;
+    }
+    .already-exists {
+      color: red;
+    }
+    input[type="checkbox"] {
+      margin-top: 6px;
+      transform: scale(1.2);
     }
   </style>
 </head>
 <body>
+  <h1>Freepik Importer</h1>
 
-  <a href="/api/auth?shop=yogireddy.myshopify.com">
-    <button style="padding: 12px 24px; font-size: 18px; background-color: green; color: white;">
-      ✅ Install Freepik App on Shopify
-    </button>
-  </a>
+  <button onclick="window.location.href='https://shopify.dev/apps'">🟩 Install Freepik App on Shopify</button>
 
-  <h1>Freepik Images</h1>
-  <input type="text" id="searchTerm" placeholder="Enter keyword..." />
-  <button onclick="search()">Search</button>
-  <button onclick="prevPage()">⬅️ Prev</button>
-  <button onclick="nextPage()">Next ➡️</button>
-  <span id="pageNum">Page: 1</span>
+  <h2>Freepik Images</h2>
+  <input type="text" id="searchTerm" placeholder="jersey" />
+  <button onclick="searchImages()">Search</button>
+  <button onclick="prevPage()">◀ Prev</button>
+  <button onclick="nextPage()">Next ▶</button>
+  Page: <span id="pageNum">1</span>
+
   <button onclick="addSelectedToShopify()">Add Selected to Shopify</button>
 
-  <div id="results" class="image-grid"></div>
+  <div class="image-grid" id="imageGrid"></div>
 
   <script>
-    let selectedImages = [];
     let currentPage = 1;
-    let currentTerm = '';
+    let existingHashes = [];
 
-    const getRandomTerm = () => {
-      const terms = ["jersey", "sports", "tshirt", "pattern", "design", "abstract", "background"];
-      return terms[Math.floor(Math.random() * terms.length)];
-    };
+    // ✅ Fetch metafield hashes from Shopify
+    async function fetchExistingHashes() {
+      const res = await fetch("/api/shopify-hashes");
+      existingHashes = await res.json(); // e.g. [ "fpimg-abc123..." ]
+    }
 
-    async function search(page = 1) {
-      const input = document.getElementById('searchTerm');
-      const typedTerm = input.value.trim();
-      currentTerm = typedTerm || currentTerm || getRandomTerm();
-      input.value = currentTerm;
-
-      document.getElementById("pageNum").textContent = `Page: ${page}`;
-
-      const res = await fetch(`/api/search?term=${encodeURIComponent(currentTerm)}&page=${page}`);
+    async function searchImages() {
+      const query = document.getElementById("searchTerm").value || "jersey";
+      const res = await fetch(`/api/search?query=${encodeURIComponent(query)}&page=${currentPage}`);
       const data = await res.json();
-      renderResults(data);
-      currentPage = page;
-    }
-
-    function renderResults(data) {
-      const results = document.getElementById('results');
-      results.innerHTML = '';
-      selectedImages = [];
-
-      if (data?.data?.length) {
-        data.data.forEach((item) => {
-          const card = document.createElement('div');
-          card.className = 'image-card';
-
-          const imageUrl = item?.image?.source?.url || '';
-          const titleText = item.title || 'Freepik Imported Product';
-
-          card.setAttribute('data-image-url', imageUrl);
-          card.setAttribute('data-title', titleText);
-
-          const img = document.createElement('img');
-          img.src = imageUrl;
-          img.alt = titleText;
-
-          const title = document.createElement('p');
-          title.innerText = titleText;
-
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-
-          if (item.duplicate) {
-            checkbox.disabled = true;
-          }
-
-          checkbox.onchange = (e) => {
-            if (e.target.checked) {
-              selectedImages.push({ title: titleText, imageUrl });
-            } else {
-              selectedImages = selectedImages.filter(i => i.imageUrl !== imageUrl);
-            }
-          };
-
-          card.appendChild(img);
-          card.appendChild(title);
-          card.appendChild(checkbox);
-
-          if (item.duplicate) {
-            const label = document.createElement('div');
-            label.style.marginTop = '8px';
-            label.style.color = 'red';
-            label.style.fontWeight = 'bold';
-            label.textContent = '❌ Already Exists in Shopify';
-            card.appendChild(label);
-          }
-
-          results.appendChild(card);
-        });
-      }
-    }
-
-    function showToast(message, color = "green") {
-      const toast = document.createElement("div");
-      toast.textContent = message;
-      toast.style = `
-        position: fixed; top: 20px; right: 20px; z-index: 9999;
-        padding: 10px 18px; border-radius: 6px;
-        background:${color}; color:#fff; font-weight:600;
-        box-shadow:0 4px 12px rgba(0,0,0,.15);`;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
-    }
-
-    async function addSelectedToShopify() {
-      const checkboxes = document.querySelectorAll('.image-card input[type="checkbox"]:checked');
-
-      if (checkboxes.length === 0) {
-        showToast("⚠️ Select at least one image", "orange");
-        return;
-      }
-
-      for (const checkbox of checkboxes) {
-        const card = checkbox.closest('.image-card');
-        let imageUrl = card.getAttribute('data-image-url');
-        let title = card.getAttribute('data-title');
-
-        if (!title || title.trim() === '') {
-          title = 'Freepik Imported Product';
-        }
-
-        try {
-          const res = await fetch("/api/add-to-shopify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageUrl, title })
-          });
-
-          const data = await res.json();
-
-          checkbox.remove();
-
-          const label = document.createElement('div');
-          label.style.marginTop = '8px';
-          label.style.fontWeight = 'bold';
-          label.style.color = data.status === 'duplicate' ? 'red' : 'green';
-          label.textContent = data.status === 'duplicate'
-            ? '❌ Already Exists in Shopify'
-            : '✅ Added to Shopify';
-
-          card.appendChild(label);
-
-          if (data.status === 'added') {
-            checkbox.disabled = true;
-          }
-
-        } catch (err) {
-          showToast("❌ Upload failed.", "red");
-          console.error('Upload failed:', err);
-        }
-      }
-
-      selectedImages = [];
+      renderImages(data);
     }
 
     function nextPage() {
-      search(currentPage + 1);
+      currentPage++;
+      document.getElementById("pageNum").textContent = currentPage;
+      searchImages();
     }
 
     function prevPage() {
-      if (currentPage > 1) search(currentPage - 1);
+      if (currentPage > 1) {
+        currentPage--;
+        document.getElementById("pageNum").textContent = currentPage;
+        searchImages();
+      }
     }
 
-    window.onload = () => {
-      currentTerm = getRandomTerm();
-      search(1);
+    function getShortHash(url) {
+      return 'fpimg-' + btoa(url).substring(0, 20).toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function renderImages(images) {
+      const grid = document.getElementById("imageGrid");
+      grid.innerHTML = "";
+      images.forEach(img => {
+        const shortHash = getShortHash(img.url);
+        const exists = existingHashes.includes(shortHash);
+
+        const card = document.createElement("div");
+        card.className = "image-card";
+
+        const image = document.createElement("img");
+        image.src = img.url;
+
+        const title = document.createElement("p");
+        title.textContent = img.title;
+
+        const status = document.createElement("div");
+        status.className = "status";
+        status.textContent = exists ? "❌ Already Exists in Shopify" : "✅ Ready to Import";
+        if (exists) status.classList.add("already-exists");
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.disabled = exists;
+        checkbox.dataset.url = img.url;
+        checkbox.dataset.title = img.title;
+
+        card.appendChild(image);
+        card.appendChild(title);
+        card.appendChild(status);
+        card.appendChild(checkbox);
+
+        grid.appendChild(card);
+      });
+    }
+
+    async function addSelectedToShopify() {
+      const checkboxes = document.querySelectorAll("input[type='checkbox']:checked");
+      const images = [];
+      checkboxes.forEach(cb => {
+        images.push({ url: cb.dataset.url, title: cb.dataset.title });
+      });
+
+      const res = await fetch("/api/add-to-shopify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images })
+      });
+
+      const result = await res.json();
+      alert(result.message || "Import completed.");
+      await fetchExistingHashes();
+      searchImages(); // re-render after import
+    }
+
+    // Load initial data
+    window.onload = async () => {
+      await fetchExistingHashes();
+      searchImages();
     };
   </script>
 </body>
