@@ -134,54 +134,58 @@ async function fetchShopifyHashes() {
       currentPage = page;
     }
 
-    function renderResults(data) {
-      const results = document.getElementById('results');
-      results.innerHTML = '';
-      selectedImages = [];
+async function renderResults(data) {
+  const results = document.getElementById('results');
+  results.innerHTML = '';
+  selectedImages = [];
 
-      if (data?.data?.length) {
-        data.data.forEach((item) => {
-          const card = document.createElement('div');
-          card.className = 'image-card';
+  if (data?.data?.length) {
+    for (const item of data.data) {
+      const card = document.createElement('div');
+      card.className = 'image-card';
 
-          const img = document.createElement('img');
-          img.src = item?.image?.source?.url || '';
-          img.alt = item.title || 'Image';
+      const img = document.createElement('img');
+      img.src = item?.image?.source?.url || '';
+      img.alt = item.title || 'Image';
 
-          const title = document.createElement('p');
-          title.innerText = item.title || 'Untitled';
+      const title = document.createElement('p');
+      title.innerText = item.title || 'Untitled';
 
-const imageUrl = item?.image?.source?.url;
-const hash = "fpimg-" + md5(imageUrl).slice(0, 8);
+      const imageUrl = item?.image?.source?.url;
+      const hash = "fpimg-" + (await md5(imageUrl)).slice(0, 8);
 
-const checkbox = document.createElement('input');
-checkbox.type = 'checkbox';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
 
-if (existingHashes.includes(hash)) {
-  checkbox.disabled = true;
-  const existsLabel = document.createElement('div');
-  existsLabel.textContent = "❌ Already Exists in Shopify";
-  existsLabel.style = "color: red; font-size: 12px; font-weight: bold; margin-top: 5px;";
-  card.appendChild(existsLabel);
-} else {
-  checkbox.onchange = (e) => {
-    if (e.target.checked) {
-      selectedImages.push({ title: item.title, imageUrl });
-    } else {
-      selectedImages = selectedImages.filter(i => i.imageUrl !== imageUrl);
+      if (existingHashes.includes(hash)) {
+        checkbox.disabled = true;
+        const existsLabel = document.createElement('div');
+        existsLabel.textContent = "❌ Already Exists in Shopify";
+        existsLabel.style = "color: red; font-size: 12px; font-weight: bold; margin-top: 5px;";
+        card.appendChild(existsLabel);
+      } else {
+        checkbox.onchange = (e) => {
+          if (e.target.checked) {
+            selectedImages.push({ title: item.title, imageUrl });
+          } else {
+            selectedImages = selectedImages.filter(i => i.imageUrl !== imageUrl);
+          }
+        };
+      }
+
+      card.appendChild(img);
+      card.appendChild(title);
+      card.appendChild(checkbox);
+      results.appendChild(card);
     }
-  };
+  }
+}
+function md5(str) {
+  return crypto.subtle.digest("MD5", new TextEncoder().encode(str)).then(buf => {
+    return Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2, '0')).join('');
+  });
 }
 
-
-
-          card.appendChild(img);
-          card.appendChild(title);
-          card.appendChild(checkbox);
-          results.appendChild(card);
-        });
-      }
-    }
 
     function showToast(message, color = "green") {
       const toast = document.createElement("div");
@@ -235,7 +239,6 @@ if (existingHashes.includes(hash)) {
   currentTerm = getRandomTerm();
   search(1);
 };
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
 
   </script>
 </body>
