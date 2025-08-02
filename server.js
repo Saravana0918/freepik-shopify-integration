@@ -31,7 +31,7 @@ app.get('/api/search', async (req, res) => {
 
   try {
     const response = await axios.get(
-      `https://api.freepik.com/v1/resources/search?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`,
+     `https://api.freepik.com/v1/resources?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`,
       { headers: { 'x-freepik-api-key': process.env.FREEPIK_API_KEY } }
     );
 
