@@ -126,52 +126,66 @@ app.get('/api/auth/callback', async (req, res) => {
 });
 
 // ✅ Return all existing Shopify Freepik image hashes from metafields
-app.get('/api/shopify-hashes', async (req, res) => {
+
+app.get("/api/shopify-hashes", async (req, res) => {
   try {
-    const productList = await axios.get(
+    const productRes = await axios.get(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?fields=id,title`,
       {
         headers: {
-          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
-          'Content-Type': 'application/json'
+          "X-Shopify-Access-Token": process.env.SHOPIFY_API_PASSWORD,
+          "Content-Type": "application/json"
         }
       }
     );
 
-    const products = productList.data.products || [];
+    const products = productRes.data.products || [];
     const hashes = [];
 
     for (const product of products) {
-      const metafieldsRes = await axios.get(
-        `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
-        {
-          headers: {
-            'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
-            'Content-Type': 'application/json'
+      const { id } = product;
+
+      try {
+        const metafieldsRes = await axios.get(
+          `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${id}/metafields.json`,
+          {
+            headers: {
+              "X-Shopify-Access-Token": process.env.SHOPIFY_API_PASSWORD,
+              "Content-Type": "application/json"
+            }
           }
+        );
+
+        const metafields = metafieldsRes.data.metafields || [];
+
+        // 🔍 Match both possible storage formats
+        const match = metafields.find(
+          mf =>
+            (mf.namespace === "freepik" && mf.key === "image_url") ||
+            mf.key === "freepik.image_url"
+        );
+
+        if (match?.value) {
+          const hash = crypto.createHash("md5").update(match.value).digest("hex").slice(0, 8);
+          const tag = "fpimg-" + hash;
+          hashes.push(tag);
+          console.log(`✅ Found for Product ${id}: ${tag}`);
+        } else {
+          console.log(`ℹ️ No matching metafield on Product ${id}`);
         }
-      );
-
-      const metafields = metafieldsRes.data.metafields || [];
-      const fpMeta = metafields.find(
-  mf => (mf.key === 'image_url' && mf.namespace === 'freepik') || mf.key === 'freepik.image_url'
-);
-
-if (fpMeta?.value) {
-  const hash = crypto.createHash('md5').update(fpMeta.value).digest('hex').slice(0, 8);
-  const final = "fpimg-" + hash;
-  hashes.push(final);
-  console.log(`✅ Found metafield for product ${product.id}: ${final}`);
-}
+      } catch (e) {
+        console.warn(`⚠️ Failed metafield fetch for product ${id}:`, e.message);
+      }
     }
 
     console.log("✅ FINAL HASH LIST:", hashes);
     res.json(hashes);
   } catch (err) {
-    console.error("❌ /api/shopify-hashes error:", err.message);
-    res.status(500).json({ error: "Shopify API error" });
+    console.error("❌ Error in /api/shopify-hashes:", err.message);
+    res.status(500).json({ error: "Shopify API failed" });
   }
 });
+
 // ✅ Helper to hash Freepik image URL
 function generateHash(url) {
   return crypto.createHash('md5').update(url).digest('hex').slice(0, 8);
