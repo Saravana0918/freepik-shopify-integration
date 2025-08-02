@@ -37,9 +37,13 @@ app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
   try {
-    // Step 1: Get all existing Shopify products
+    // Step 1: Generate unique tag from imageUrl
+    const hash = crypto.createHash('md5').update(imageUrl).digest('hex');
+    const tag = `freepik-${hash}`;
+
+    // Step 2: Check if a product with the same tag already exists
     const existingRes = await axios.get(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250`,
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=1&fields=id,title,tags&handle=${tag}`,
       {
         headers: {
           'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
@@ -47,36 +51,11 @@ app.post('/api/add-to-shopify', async (req, res) => {
       }
     );
 
-    const existingProducts = existingRes.data.products || [];
+    const products = existingRes.data.products || [];
 
-    // Step 2: Check metafields of each product for matching Freepik image URL
-    let isDuplicate = false;
+    const found = products.find(p => p.tags?.includes(tag));
 
-    for (const product of existingProducts) {
-      const metaRes = await axios.get(
-        `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
-        {
-          headers: {
-            'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
-          }
-        }
-      );
-
-      const metafields = metaRes.data.metafields;
-      const match = metafields.find(m =>
-        m.namespace === "freepik" &&
-        m.key === "source_image" &&
-        m.value === imageUrl
-      );
-
-      if (match) {
-        isDuplicate = true;
-        break;
-      }
-    }
-
-    // Step 3: If duplicate, return early
-    if (isDuplicate) {
+    if (found) {
       return res.json({
         success: false,
         duplicate: true,
@@ -84,22 +63,15 @@ app.post('/api/add-to-shopify', async (req, res) => {
       });
     }
 
-    // Step 4: Otherwise, create the product with image and metafield
+    // Step 3: Create product with that tag
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
         product: {
           title: title,
           status: "active",
-          images: [{ src: imageUrl }],
-          metafields: [
-            {
-              namespace: "freepik",
-              key: "source_image",
-              type: "single_line_text_field",
-              value: imageUrl
-            }
-          ]
+          tags: tag,
+          images: [{ src: imageUrl }]
         }
       },
       {
@@ -113,6 +85,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
     res.json({ success: true, message: '✅ Added to Shopify successfully!' });
 
   } catch (error) {
+    console.error("❌ Add Error:", error?.response?.data || error.message);
     res.status(500).json({
       success: false,
       message: '❌ Failed to add to Shopify',
