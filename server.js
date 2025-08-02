@@ -37,13 +37,13 @@ app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
   try {
-    // Step 1: Generate unique tag from imageUrl
+    // Step 1: Create a unique tag from the image URL
     const hash = crypto.createHash('md5').update(imageUrl).digest('hex');
     const tag = `freepik-${hash}`;
 
-    // Step 2: Check if a product with the same tag already exists
+    // Step 2: Get all existing products (limit to 250 for performance)
     const existingRes = await axios.get(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=1&fields=id,title,tags&handle=${tag}`,
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,title,tags`,
       {
         headers: {
           'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
@@ -53,7 +53,8 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     const products = existingRes.data.products || [];
 
-    const found = products.find(p => p.tags?.includes(tag));
+    // Step 3: Check if any product already has this tag
+    const found = products.find(p => (p.tags || "").split(", ").includes(tag));
 
     if (found) {
       return res.json({
@@ -63,7 +64,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
       });
     }
 
-    // Step 3: Create product with that tag
+    // Step 4: Add the product with the unique Freepik tag
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
@@ -85,7 +86,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
     res.json({ success: true, message: '✅ Added to Shopify successfully!' });
 
   } catch (error) {
-    console.error("❌ Add Error:", error?.response?.data || error.message);
+    console.error("❌ Shopify Add Error:", error?.response?.data || error.message);
     res.status(500).json({
       success: false,
       message: '❌ Failed to add to Shopify',
