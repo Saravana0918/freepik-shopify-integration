@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
@@ -19,6 +18,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// Freepik image search
 app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
@@ -33,34 +33,11 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-app.get('/api/products', async (req, res) => {
-  try {
-    const response = await axios.get(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=tags`,
-      {
-        headers: {
-          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
-        }
-      }
-    );
-
-    const tags = new Set();
-    (response.data.products || []).forEach(p => {
-      (p.tags || "").split(",").forEach(t => tags.add(t.trim()));
-    });
-
-    res.json({ tags: Array.from(tags) });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ tags: [] });
-  }
-});
-
+// Add image to Shopify with duplicate check
 app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
   try {
-    // Step 1: Fetch all products (limit 250)
     const existingRes = await axios.get(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,title`,
       {
@@ -72,36 +49,33 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     const products = existingRes.data.products || [];
 
-    // Step 2: Loop through and fetch metafields of each product
     for (const product of products) {
-  await new Promise(resolve => setTimeout(resolve, 600)); // Wait 600ms between API calls
+      await new Promise(resolve => setTimeout(resolve, 600)); // Shopify rate limit
+      const metafieldsRes = await axios.get(
+        `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
+          }
+        }
+      );
 
-  const metafieldsRes = await axios.get(
-    `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
-    {
-      headers: {
-        'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
+      const metas = metafieldsRes.data.metafields || [];
+      const found = metas.find(m =>
+        m.namespace === "freepik" &&
+        m.key === "image_url" &&
+        m.value === imageUrl
+      );
+
+      if (found) {
+        return res.json({
+          success: false,
+          duplicate: true,
+          message: '⚠️ This image is already added as a product.'
+        });
       }
     }
-  );
 
-  const metas = metafieldsRes.data.metafields || [];
-  const found = metas.find(m =>
-    m.namespace === "freepik" &&
-    m.key === "image_url" &&
-    m.value === imageUrl
-  );
-
-  if (found) {
-    return res.json({
-      success: false,
-      duplicate: true,
-      message: '⚠️ This image is already added as a product.'
-    });
-  }
-}
-
-    // Step 3: If not found, create product with metafield
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
@@ -109,6 +83,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
           title,
           status: "active",
           images: [{ src: imageUrl }],
+          tags: "freepik-imported",
           metafields: [
             {
               namespace: "freepik",
@@ -139,8 +114,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
   }
 });
 
-
-
+// OAuth install
 app.get('/api/auth', (req, res) => {
   const shop = req.query.shop;
   if (!shop) return res.status(400).send('Missing shop parameter');
@@ -153,6 +127,7 @@ app.get('/api/auth', (req, res) => {
   res.redirect(redirectUrl);
 });
 
+// OAuth callback
 app.get('/api/auth/callback', async (req, res) => {
   const { shop, hmac, code } = req.query;
   if (!shop || !hmac || !code) {
@@ -178,6 +153,7 @@ app.get('/api/auth/callback', async (req, res) => {
       client_secret: process.env.SHOPIFY_API_SECRET,
       code
     });
+
     const accessToken = tokenRes.data.access_token;
     console.log("✅ App installed! Access Token:", accessToken);
     res.send("✅ App installed successfully. You can close this tab.");
@@ -186,6 +162,7 @@ app.get('/api/auth/callback', async (req, res) => {
   }
 });
 
+// Serve frontend
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
