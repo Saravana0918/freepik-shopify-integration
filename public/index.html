@@ -191,40 +191,32 @@ async function addSelectedToShopify() {
     return;
   }
 
-  const existingTags = await getExistingFreepikTags();
-  let added = 0;
-  let skipped = 0;
+  if (selectedImages.length > 1) {
+    showToast("⚠️ Please add one image at a time to avoid Shopify limit.", "orange");
+    return;
+  }
 
-  await Promise.all(selectedImages.map(async (item) => {
-    const hash = await cryptoDigest(item.imageUrl);
-    const tag = `freepik-${hash}`;
+  const item = selectedImages[0];
 
-    if (existingTags.includes(tag)) {
-      skipped++;
-      return;
-    }
+  const res = await fetch("/api/add-to-shopify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(item)
+  });
 
-    const res = await fetch("/api/add-to-shopify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(item)
-    });
+  const data = await res.json();
 
-    const data = await res.json();
-
-    if (data.success) {
-      added++;
-    } else {
-      showToast("❌ Upload failed for one image", "red");
-      console.error(data.error || "Unknown error");
-    }
-  }));
+  if (data.success) {
+    showToast("✅ Product added to Shopify.");
+  } else if (data.duplicate) {
+    showToast("⚠️ This image already exists in Shopify.", "orange");
+  } else {
+    showToast("❌ Upload failed.", "red");
+    console.error(data.error || "Unknown error");
+  }
 
   selectedImages = [];
   document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
-
-  if (added > 0) showToast(`✅ ${added} product(s) added to Shopify.`);
-  if (skipped > 0) showToast(`⚠️ ${skipped} already existed and were skipped.`, "orange");
 }
 
 
