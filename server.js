@@ -19,13 +19,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Generate consistent short hash for image URL
+// ✅ Short hash for Shopify-friendly tags (12 chars max after prefix)
 function hashImageUrl(url) {
-  return 'fpimg-' + crypto.createHash('md5').update(url).digest('hex');
+  return 'fpimg-' + crypto.createHash('sha256').update(url.trim().toLowerCase()).digest('hex').slice(0, 12);
 }
 
 // ✅ Route: Freepik search with duplicate detection
-// ✅ Route: Freepik search with duplicate detection (with pagination)
 app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
