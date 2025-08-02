@@ -37,11 +37,9 @@ app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
   try {
-    // Step 1: Create a unique tag from the image URL
     const hash = crypto.createHash('md5').update(imageUrl).digest('hex');
     const tag = `freepik-${hash}`;
 
-    // Step 2: Get all existing products (limit to 250 for performance)
     const existingRes = await axios.get(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,title,tags`,
       {
@@ -53,8 +51,10 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     const products = existingRes.data.products || [];
 
-    // Step 3: Check if any product already has this tag
-    const found = products.find(p => (p.tags || "").split(", ").includes(tag));
+    const found = products.find(p => {
+      const tags = (p.tags || "").split(",").map(t => t.trim());
+      return tags.includes(tag);
+    });
 
     if (found) {
       return res.json({
@@ -64,7 +64,6 @@ app.post('/api/add-to-shopify', async (req, res) => {
       });
     }
 
-    // Step 4: Add the product with the unique Freepik tag
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
