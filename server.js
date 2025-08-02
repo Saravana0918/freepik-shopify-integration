@@ -24,6 +24,7 @@ function hashImageUrl(url) {
   return 'fpimg-' + crypto.createHash('md5').update(url).digest('hex');
 }
 
+// ✅ Freepik Search + Shopify Metafield Duplicate Detection
 app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
@@ -38,36 +39,29 @@ app.get('/api/search', async (req, res) => {
 
     const freepikResults = freepikResponse.data?.data || [];
 
-    // ✅ Fetch existing tags from Shopify (with pagination)
-    let existingHashTags = [];
-    let shopifyUrl = `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,tags`;
+    // ✅ Get all Freepik hashes from Shopify metafields
+    let existingHashes = new Set();
+    let productsUrl = `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json?namespace=freepik&key=image_hash&limit=250`;
     let pageCount = 0;
 
-    while (shopifyUrl && pageCount < 5) {
-      const shopifyRes = await axios.get(shopifyUrl, {
+    while (productsUrl && pageCount < 5) {
+      const shopifyRes = await axios.get(productsUrl, {
         headers: {
           'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
         }
       });
 
-      const products = shopifyRes.data.products || [];
-
-      for (const product of products) {
-        if (product.tags) {
-          product.tags.split(',').forEach(tag => {
-            const trimmed = tag.trim();
-            if (trimmed.startsWith('fpimg-')) {
-              existingHashTags.push(trimmed);
-            }
-          });
+      const metafields = shopifyRes.data.metafields || [];
+      metafields.forEach(meta => {
+        if (meta.value && typeof meta.value === 'string') {
+          existingHashes.add(meta.value);
         }
-      }
+      });
 
-      // Pagination: Find next page
       const linkHeader = shopifyRes.headers.link;
       if (linkHeader && linkHeader.includes('rel="next"')) {
         const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-        shopifyUrl = match?.[1] || null;
+        productsUrl = match?.[1] || null;
       } else {
         break;
       }
@@ -75,13 +69,13 @@ app.get('/api/search', async (req, res) => {
       pageCount++;
     }
 
-    // ✅ Tag matching
+    // ✅ Mark duplicate Freepik images
     const resultsWithStatus = freepikResults.map(item => {
       const imageUrl = item?.image?.source?.url;
       const hashTag = hashImageUrl(imageUrl);
       return {
         ...item,
-        duplicate: existingHashTags.includes(hashTag)
+        duplicate: existingHashes.has(hashTag)
       };
     });
 
@@ -93,9 +87,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-
-
-// ✅ Route: Add product to Shopify and tag with image hash
+// ✅ Add to Shopify (with Metafield for duplicate detection)
 app.post('/api/add-to-shopify', async (req, res) => {
   let { title, imageUrl } = req.body;
 
@@ -106,14 +98,37 @@ app.post('/api/add-to-shopify', async (req, res) => {
   const hashTag = hashImageUrl(imageUrl);
 
   try {
-    await axios.post(
+    const productRes = await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
         product: {
           title,
           status: "active",
           images: [{ src: imageUrl }],
-          tags: `freepik-imported,${hashTag}`
+          tags: 'freepik-imported'
+        }
+      },
+      {
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const productId = productRes.data.product.id;
+
+    // ✅ Attach metafield with image hash
+    await axios.post(
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
+      {
+        metafield: {
+          namespace: 'freepik',
+          key: 'image_hash',
+          value: hashTag,
+          type: 'single_line_text_field',
+          owner_id: productId,
+          owner_resource: 'product'
         }
       },
       {
@@ -136,7 +151,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
   }
 });
 
-// (Optional) Shopify OAuth install
+// Optional OAuth
 app.get('/api/auth', (req, res) => {
   const shop = req.query.shop;
   if (!shop) return res.status(400).send('Missing shop parameter');
@@ -149,7 +164,7 @@ app.get('/api/auth', (req, res) => {
   res.redirect(redirectUrl);
 });
 
-// Serve index.html
+// Serve frontend
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
