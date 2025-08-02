@@ -28,16 +28,29 @@ function getShortHash(imageUrl) {
 app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
+
+  console.log("🔍 Term:", term);
+  console.log("🔑 Freepik Key Loaded:", process.env.FREEPIK_API_KEY); // ADD THIS LINE
+
   try {
     const response = await axios.get(
       `https://api.freepik.com/v1/resources?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`,
-      { headers: { 'x-freepik-api-key': process.env.FREEPIK_API_KEY } }
+      {
+        headers: {
+          'x-freepik-api-key': process.env.FREEPIK_API_KEY
+        }
+      }
     );
     res.json(response.data);
   } catch (error) {
-    res.status(500).json({ error: 'Freepik API error', detail: error.response?.data || error.message });
+    console.error("❌ Freepik error:", error.response?.data || error.message);
+    res.status(500).json({
+      error: "Freepik API error",
+      detail: error.response?.data || error.message
+    });
   }
 });
+
 
 // ✅ Add product to Shopify with hash tag
 app.post('/api/add-to-shopify', async (req, res) => {
