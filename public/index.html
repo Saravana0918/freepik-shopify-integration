@@ -175,33 +175,39 @@ async function addSelectedToShopify() {
     return;
   }
 
-  // instant optimistic feedback
-  showToast(`✅ ${selectedImages.length} image(s) added to Shopify.`);
+  let total = selectedImages.length;
+  let added = 0;
+  let skipped = 0;
 
   // background uploads
-  selectedImages.forEach((item) => {
-    fetch("/api/add-to-shopify", {
+  await Promise.all(selectedImages.map(async (item) => {
+    const res = await fetch("/api/add-to-shopify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(item)
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.success) {
-        showToast("❌ Upload failed for one image", "red");
-        console.error(data.error || "Unknown error");
-      }
-    })
-    .catch(err => {
-      showToast("❌ Upload failed for one image", "red");
-      console.error(err);
     });
-  });
+
+    const data = await res.json();
+
+    if (data.duplicate) {
+      skipped++;
+    } else if (data.success) {
+      added++;
+    } else {
+      showToast("❌ Upload failed for one image", "red");
+      console.error(data.error || "Unknown error");
+    }
+  }));
 
   // clear selection in UI
   selectedImages = [];
   document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+
+  // Show result toast
+  if (added > 0) showToast(`✅ ${added} product(s) added to Shopify.`);
+  if (skipped > 0) showToast(`⚠️ ${skipped} already existed and were skipped.`, "orange");
 }
+
 
     function nextPage() {
       search(currentPage + 1);
