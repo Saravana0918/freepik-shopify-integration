@@ -33,11 +33,27 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// ✅ Always add product (no duplicate check)
 app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
   try {
+    // Step 1: Search for existing product with the same metafield value
+    const metafieldRes = await axios.get(
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json?namespace=freepik&key=image_url&value=${encodeURIComponent(imageUrl)}`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (metafieldRes.data.metafields && metafieldRes.data.metafields.length > 0) {
+      // ✅ Duplicate found
+      return res.json({ status: 'duplicate', message: '❌ Already exists in Shopify' });
+    }
+
+    // Step 2: Create new product
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
@@ -64,17 +80,19 @@ app.post('/api/add-to-shopify', async (req, res) => {
       }
     );
 
-    res.json({ success: true, message: '✅ Product added to Shopify.' });
+    // ✅ Product added
+    res.json({ status: 'added', message: '✅ Product added to Shopify' });
 
   } catch (error) {
     console.error('Shopify API error:', error.response?.data || error.message);
     res.status(500).json({
-      success: false,
+      status: 'error',
       message: '❌ Failed to add product',
       error: error.response?.data || error.message
     });
   }
 });
+
 
 // OAuth install
 app.get('/api/auth', (req, res) => {
