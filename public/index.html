@@ -133,33 +133,50 @@
       const card = document.createElement('div');
       card.className = 'image-card';
 
-      // ✅ Add data attributes so we can use them later
-      card.setAttribute('data-image-url', item?.image?.source?.url || '');
-      card.setAttribute('data-title', item.title || 'Freepik Imported Product');
+      // ✅ Add image data attributes
+      const imageUrl = item?.image?.source?.url || '';
+      const titleText = item.title || 'Freepik Imported Product';
+
+      card.setAttribute('data-image-url', imageUrl);
+      card.setAttribute('data-title', titleText);
 
       const img = document.createElement('img');
-      img.src = item?.image?.source?.url || '';
-      img.alt = item.title || 'Image';
+      img.src = imageUrl;
+      img.alt = titleText;
 
       const title = document.createElement('p');
-      title.innerText = item.title || 'Untitled';
+      title.innerText = titleText;
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
+
+      // ✅ Disable checkbox if already exists
+      if (item.duplicate) {
+        checkbox.disabled = true;
+      }
+
       checkbox.onchange = (e) => {
         if (e.target.checked) {
-          selectedImages.push({
-            title: item.title || 'Freepik Imported Product',
-            imageUrl: item?.image?.source?.url
-          });
+          selectedImages.push({ title: titleText, imageUrl });
         } else {
-          selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
+          selectedImages = selectedImages.filter(i => i.imageUrl !== imageUrl);
         }
       };
 
       card.appendChild(img);
       card.appendChild(title);
       card.appendChild(checkbox);
+
+      // ✅ Add label if it's already in Shopify
+      if (item.duplicate) {
+        const label = document.createElement('div');
+        label.style.marginTop = '8px';
+        label.style.color = 'red';
+        label.style.fontWeight = 'bold';
+        label.textContent = '❌ Already Exists in Shopify';
+        card.appendChild(label);
+      }
+
       results.appendChild(card);
     });
   }
