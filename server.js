@@ -36,8 +36,8 @@ app.get('/api/search', async (req, res) => {
 
     const freepikResults = freepikResponse.data?.data || [];
 
-    let existingHashes = new Set();
-    let shopifyUrl = `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json?namespace=freepik&key=image_hash&limit=250`;
+    let existingUrls = new Set();
+    let shopifyUrl = `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json?namespace=freepik&key=image_url&limit=250`;
     let pageCount = 0;
 
     while (shopifyUrl && pageCount < 5) {
@@ -50,7 +50,7 @@ app.get('/api/search', async (req, res) => {
       const metafields = shopifyRes.data.metafields || [];
       metafields.forEach(meta => {
         if (meta.value && typeof meta.value === 'string') {
-          existingHashes.add(meta.value);
+          existingUrls.add(meta.value);
         }
       });
 
@@ -67,10 +67,9 @@ app.get('/api/search', async (req, res) => {
 
     const resultsWithStatus = freepikResults.map(item => {
       const imageUrl = item?.image?.source?.url;
-      const hashTag = hashImageUrl(imageUrl);
       return {
         ...item,
-        duplicate: existingHashes.has(hashTag)
+        duplicate: existingUrls.has(imageUrl)
       };
     });
 
@@ -112,7 +111,29 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     const productId = productRes.data.product.id;
 
-    const metafieldRes = await axios.post(
+    const headers = {
+      'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
+      'Content-Type': 'application/json'
+    };
+
+    // Save image URL for exact duplicate check
+    await axios.post(
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
+      {
+        metafield: {
+          namespace: 'freepik',
+          key: 'image_url',
+          value: imageUrl,
+          type: 'url',
+          owner_id: productId,
+          owner_resource: 'product'
+        }
+      },
+      { headers }
+    );
+
+    // Save hash for reference (optional)
+    await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
       {
         metafield: {
@@ -124,15 +145,8 @@ app.post('/api/add-to-shopify', async (req, res) => {
           owner_resource: 'product'
         }
       },
-      {
-        headers: {
-          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
-          'Content-Type': 'application/json'
-        }
-      }
+      { headers }
     );
-
-    console.log('✅ Metafield created:', metafieldRes.data.metafield);
 
     res.json({ status: 'added', message: '✅ Product added to Shopify' });
 
