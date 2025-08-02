@@ -91,7 +91,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
   }
 
   try {
-    // Step 1: Check for duplicates (same as before)
+    // Duplicate check (same as before)
     const productsRes = await axios.get(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,tags`,
       {
@@ -124,7 +124,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
       }
     }
 
-    // Step 2: Create product
+    // ✅ Step 1: Create the product
     const productCreateRes = await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
@@ -145,7 +145,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     const productId = productCreateRes.data.product.id;
 
-    // ✅ Step 3: Add metafield separately
+    // ✅ Step 2: Create metafield via separate call
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
       {
