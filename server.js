@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
+const shopifyStore = 'yogireddy.myshopify.com';
 const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_API_PASSWORD;
 
 app.use(cors());
