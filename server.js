@@ -69,7 +69,8 @@ app.get('/api/search', async (req, res) => {
       const imageUrl = item?.image?.source?.url;
       return {
         ...item,
-        duplicate: existingUrls.has(imageUrl)
+       duplicate: Array.from(existingUrls).some(storedUrl =>
+  storedUrl.split('?')[0].trim().toLowerCase() === imageUrl.split('?')[0].trim().toLowerCase())
       };
     });
 
