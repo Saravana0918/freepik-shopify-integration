@@ -60,7 +60,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
   try {
-    const hash = crypto.createHash('md5').update(imageUrl).digest('hex');
+   const hash = crypto.createHash('sha256').update(imageUrl).digest('hex');
     const tag = `freepik-${hash}`;
 
     const existingRes = await axios.get(
