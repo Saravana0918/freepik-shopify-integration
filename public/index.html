@@ -174,31 +174,49 @@
     }
 
     async function addSelectedToShopify() {
-      if (selectedImages.length === 0) {
-        showToast("⚠️ Select at least one image", "orange");
-        return;
-      }
+  const checkboxes = document.querySelectorAll('.image-card input[type="checkbox"]:checked');
 
-      const item = selectedImages[0];
+  if (checkboxes.length === 0) {
+    showToast("⚠️ Select at least one image", "orange");
+    return;
+  }
 
+  for (const checkbox of checkboxes) {
+    const card = checkbox.closest('.image-card');
+    const imageUrl = card.getAttribute('data-image-url');
+    const title = card.getAttribute('data-title');
+
+    try {
       const res = await fetch("/api/add-to-shopify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item)
+        body: JSON.stringify({ imageUrl, title })
       });
 
       const data = await res.json();
 
-      if (data.success) {
-        showToast("✅ Product added to Shopify.");
-      } else {
-        showToast("❌ Upload failed.", "red");
-        console.error(data.error || "Unknown error");
-      }
+      // Remove checkbox and show label below image
+      checkbox.remove();
 
-      selectedImages = [];
-      document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+      const statusLabel = document.createElement('div');
+      statusLabel.style.marginTop = '8px';
+      statusLabel.style.fontWeight = 'bold';
+      statusLabel.style.color = data.status === 'duplicate' ? 'red' : 'green';
+      statusLabel.textContent = data.status === 'duplicate'
+        ? '❌ Already Exists in Shopify'
+        : '✅ Added to Shopify';
+
+      card.appendChild(statusLabel);
+
+    } catch (err) {
+      showToast("❌ Upload failed.", "red");
+      console.error('Error uploading:', err);
     }
+  }
+
+  selectedImages = [];
+}
+
 
     function nextPage() {
       search(currentPage + 1);
