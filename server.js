@@ -1,111 +1,127 @@
+
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-// 🔐 Use values from .env
-const shopifyStore = process.env.SHOPIFY_STORE;
-const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_API_PASSWORD;
-const FREEPIK_API_KEY = process.env.FREEPIK_API_KEY;
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Security headers
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "frame-ancestors https://*.myshopify.com https://admin.shopify.com");
   res.setHeader('Access-Control-Allow-Origin', '*');
   next();
 });
 
-// 🔐 Generate short Freepik image hash
-function getShortHash(url) {
-  return 'fpimg-' + Buffer.from(url).toString('base64').substring(0, 20).toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-// ✅ Create new Shopify product with Freepik image and save metafields
-app.post('/api/add-to-shopify', async (req, res) => {
-  const { images } = req.body;
-
+// Freepik image search
+app.get('/api/search', async (req, res) => {
+  const term = req.query.term || 'jersey';
+  const page = req.query.page || 1;
   try {
-    for (const image of images) {
-      const shortHash = getShortHash(image.url);
-
-      const productRes = await axios.post(`https://${shopifyStore}/admin/api/2023-10/products.json`, {
-        product: {
-          title: image.title,
-          images: [{ src: image.url }],
-          tags: ['freepik-imported']
-        }
-      }, {
-        headers: {
-          'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const productId = productRes.data.product.id;
-
-      const metafields = [
-        {
-          namespace: 'freepik',
-          key: 'image_hash',
-          value: shortHash,
-          type: 'single_line_text_field'
-        },
-        {
-          namespace: 'freepik',
-          key: 'image_url',
-          value: image.url,
-          type: 'url'
-        }
-      ];
-
-      for (const mf of metafields) {
-        await axios.post(`https://${shopifyStore}/admin/api/2023-10/products/${productId}/metafields.json`, {
-          metafield: mf
-        }, {
-          headers: {
-            'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
-            'Content-Type': 'application/json'
-          }
-        });
-      }
-    }
-
-    res.json({ message: '✅ All products added to Shopify successfully.' });
-  } catch (err) {
-    console.error("❌ Error importing to Shopify:", err.message);
-    res.status(500).json({ error: 'Failed to import products' });
+    const response = await axios.get(
+      `https://api.freepik.com/v1/resources?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`,
+      { headers: { 'x-freepik-api-key': process.env.FREEPIK_API_KEY } }
+    );
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ error: 'Freepik API error', detail: error.response?.data || error.message });
   }
 });
 
-// ✅ Freepik image search
-app.get('/api/search', async (req, res) => {
-  const term = req.query.query || 'jersey';
-  const page = req.query.page || 1;
+// ✅ Always add product (no duplicate check)
+app.post('/api/add-to-shopify', async (req, res) => {
+  const { title, imageUrl } = req.body;
 
   try {
-    const response = await axios.get(`https://api.freepik.com/v1/resources/search?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`, {
-      headers: {
-        'x-freepik-api-key': FREEPIK_API_KEY
+    await axios.post(
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
+      {
+        product: {
+          title,
+          status: "active",
+          images: [{ src: imageUrl }],
+          tags: "freepik-imported",
+          metafields: [
+            {
+              namespace: "freepik",
+              key: "image_url",
+              type: "single_line_text_field",
+              value: imageUrl
+            }
+          ]
+        }
+      },
+      {
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
+          'Content-Type': 'application/json'
+        }
       }
+    );
+
+    res.json({ success: true, message: '✅ Product added to Shopify.' });
+
+  } catch (error) {
+    console.error('Shopify API error:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      message: '❌ Failed to add product',
+      error: error.response?.data || error.message
+    });
+  }
+});
+
+// OAuth install
+app.get('/api/auth', (req, res) => {
+  const shop = req.query.shop;
+  if (!shop) return res.status(400).send('Missing shop parameter');
+
+  const redirectUrl = `https://${shop}/admin/oauth/authorize` +
+    `?client_id=${process.env.SHOPIFY_API_KEY}` +
+    `&scope=read_products,write_products` +
+    `&redirect_uri=${process.env.REDIRECT_URI}`;
+
+  res.redirect(redirectUrl);
+});
+
+// OAuth callback
+app.get('/api/auth/callback', async (req, res) => {
+  const { shop, hmac, code } = req.query;
+  if (!shop || !hmac || !code) {
+    return res.status(400).send('Missing required parameters');
+  }
+
+  const params = { ...req.query };
+  delete params.hmac;
+  const message = Object.keys(params).sort().map(key => `${key}=${params[key]}`).join('&');
+
+  const generatedHash = crypto
+    .createHmac('sha256', process.env.SHOPIFY_API_SECRET)
+    .update(message)
+    .digest('hex');
+
+  if (generatedHash !== hmac) {
+    return res.status(400).send('HMAC validation failed');
+  }
+
+  try {
+    const tokenRes = await axios.post(`https://${shop}/admin/oauth/access_token`, {
+      client_id: process.env.SHOPIFY_API_KEY,
+      client_secret: process.env.SHOPIFY_API_SECRET,
+      code
     });
 
-    const results = response.data?.data?.map(img => ({
-      title: img.title,
-      url: img?.image?.source?.url || ''
-    })) || [];
-
-    res.json(results);
+    const accessToken = tokenRes.data.access_token;
+    console.log("✅ App installed! Access Token:", accessToken);
+    res.send("✅ App installed successfully. You can close this tab.");
   } catch (error) {
-    console.error('❌ Freepik API error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch Freepik images' });
+    res.status(500).send("OAuth process failed");
   }
 });
 
@@ -115,5 +131,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server is running at http://localhost:${PORT}`);
 });
