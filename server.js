@@ -8,6 +8,9 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
+const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_API_PASSWORD;
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -18,161 +21,125 @@ app.use((req, res, next) => {
   next();
 });
 
-function hashImageUrl(url) {
-  return 'fpimg-' + crypto.createHash('md5').update(url).digest('hex');
+function getShortHash(url) {
+  return 'fpimg-' + Buffer.from(url).toString('base64').substring(0, 20).toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+// ✅ Shopify metafields API to detect existing image hashes
+app.get('/api/shopify-hashes', async (req, res) => {
+  try {
+    const productRes = await axios.get(`https://${SHOPIFY_STORE}/admin/api/2023-10/products.json?limit=250&fields=id`, {
+      headers: {
+        'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN
+      }
+    });
+
+    const productIds = productRes.data.products.map(p => p.id);
+    const hashes = [];
+
+    for (const id of productIds) {
+      const metafieldsRes = await axios.get(`https://${SHOPIFY_STORE}/admin/api/2023-10/products/${id}/metafields.json`, {
+        headers: {
+          'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN
+        }
+      });
+
+      metafieldsRes.data.metafields.forEach(meta => {
+        if (meta.namespace === 'freepik' && meta.key === 'image_hash' && meta.value.startsWith('fpimg-')) {
+          hashes.push(meta.value);
+        }
+      });
+    }
+
+    res.json(hashes);
+  } catch (error) {
+    console.error("Error fetching Shopify metafields:", error.message);
+    res.status(500).json({ error: 'Failed to fetch metafields' });
+  }
+});
+
+// ✅ Add new products and save metafields
+app.post('/api/add-to-shopify', async (req, res) => {
+  const { images } = req.body;
+
+  try {
+    for (const image of images) {
+      const shortHash = getShortHash(image.url);
+
+      const productRes = await axios.post(`https://${SHOPIFY_STORE}/admin/api/2023-10/products.json`, {
+        product: {
+          title: image.title,
+          images: [{ src: image.url }],
+          tags: ['freepik-imported']
+        }
+      }, {
+        headers: {
+          'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const productId = productRes.data.product.id;
+
+      const metafields = [
+        {
+          namespace: 'freepik',
+          key: 'image_hash',
+          value: shortHash,
+          type: 'single_line_text_field'
+        },
+        {
+          namespace: 'freepik',
+          key: 'image_url',
+          value: image.url,
+          type: 'url'
+        }
+      ];
+
+      for (const mf of metafields) {
+        await axios.post(`https://${SHOPIFY_STORE}/admin/api/2023-10/products/${productId}/metafields.json`, {
+          metafield: mf
+        }, {
+          headers: {
+            'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+    }
+
+    res.json({ message: 'All products added successfully.' });
+  } catch (err) {
+    console.error("Error importing images:", err.message);
+    res.status(500).json({ error: 'Failed to import images' });
+  }
+});
+
+// Optional Freepik image search proxy (depends on your setup)
 app.get('/api/search', async (req, res) => {
-  const term = req.query.term || 'jersey';
+  const term = req.query.query || 'jersey';
   const page = req.query.page || 1;
 
   try {
-    const freepikResponse = await axios.get(
-      `https://api.freepik.com/v1/resources?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`,
-      {
-        headers: { 'x-freepik-api-key': process.env.FREEPIK_API_KEY }
+    const response = await axios.get(`https://api.freepik.com/v1/resources?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`, {
+      headers: {
+        'x-freepik-api-key': process.env.FREEPIK_API_KEY
       }
-    );
-
-    const freepikResults = freepikResponse.data?.data || [];
-
-    let existingUrls = new Set();
-    let shopifyUrl = `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json?namespace=freepik&key=image_url&limit=250`;
-    let pageCount = 0;
-
-    while (shopifyUrl && pageCount < 5) {
-      const shopifyRes = await axios.get(shopifyUrl, {
-        headers: {
-          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
-        }
-      });
-
-      const metafields = shopifyRes.data.metafields || [];
-      metafields.forEach(meta => {
-        if (meta.value && typeof meta.value === 'string') {
-          existingUrls.add(meta.value);
-        }
-      });
-
-      const linkHeader = shopifyRes.headers.link;
-      if (linkHeader && linkHeader.includes('rel="next"')) {
-        const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-        shopifyUrl = match?.[1] || null;
-      } else {
-        break;
-      }
-
-      pageCount++;
-    }
-
-    const resultsWithStatus = freepikResults.map(item => {
-      const imageUrl = item?.image?.source?.url;
-      return {
-        ...item,
-       duplicate: Array.from(existingUrls).some(storedUrl =>
-  storedUrl.split('?')[0].trim().toLowerCase() === imageUrl.split('?')[0].trim().toLowerCase())
-      };
     });
 
-    res.json({ data: resultsWithStatus });
+    const results = response.data?.data?.map(img => ({
+      title: img.title,
+      url: img?.image?.source?.url || ''
+    })) || [];
 
+    res.json(results);
   } catch (error) {
-    console.error('❌ /api/search error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Freepik API or Shopify API error' });
+    console.error('❌ Freepik API error:', error.message);
+    res.status(500).json({ error: 'Failed to search Freepik images' });
   }
 });
 
-app.post('/api/add-to-shopify', async (req, res) => {
-  let { title, imageUrl } = req.body;
-
-  if (!title || title.trim() === '') {
-    title = 'Freepik Imported Product';
-  }
-
-  const hashTag = hashImageUrl(imageUrl);
-
-  try {
-    const productRes = await axios.post(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
-      {
-        product: {
-          title,
-          status: "active",
-          images: [{ src: imageUrl }],
-          tags: 'freepik-imported'
-        }
-      },
-      {
-        headers: {
-          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    const productId = productRes.data.product.id;
-
-    const headers = {
-      'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
-      'Content-Type': 'application/json'
-    };
-
-    // Save image URL for exact duplicate check
-    await axios.post(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
-      {
-        metafield: {
-          namespace: 'freepik',
-          key: 'image_url',
-          value: imageUrl,
-          type: 'url',
-          owner_id: productId,
-          owner_resource: 'product'
-        }
-      },
-      { headers }
-    );
-
-    // Save hash for reference (optional)
-    await axios.post(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
-      {
-        metafield: {
-          namespace: 'freepik',
-          key: 'image_hash',
-          value: hashTag,
-          type: 'single_line_text_field',
-          owner_id: productId,
-          owner_resource: 'product'
-        }
-      },
-      { headers }
-    );
-
-    res.json({ status: 'added', message: '✅ Product added to Shopify' });
-
-  } catch (error) {
-    console.error('❌ /api/add-to-shopify error:', error.response?.data || error.message);
-    res.status(500).json({
-      status: 'error',
-      message: '❌ Failed to add product',
-      error: error.response?.data || error.message
-    });
-  }
-});
-
-app.get('/api/auth', (req, res) => {
-  const shop = req.query.shop;
-  if (!shop) return res.status(400).send('Missing shop parameter');
-
-  const redirectUrl = `https://${shop}/admin/oauth/authorize` +
-    `?client_id=${process.env.SHOPIFY_API_KEY}` +
-    `&scope=read_products,write_products` +
-    `&redirect_uri=${process.env.REDIRECT_URI}`;
-
-  res.redirect(redirectUrl);
-});
-
+// Serve index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
