@@ -132,54 +132,64 @@
     }
 
     async function renderResults(data) {
-      const results = document.getElementById('results');
-      results.innerHTML = '';
-      selectedImages = [];
+  const results = document.getElementById('results');
+  results.innerHTML = '';
+  selectedImages = [];
 
-      if (data?.data?.length) {
-        for (const item of data.data) {
-          const card = document.createElement('div');
-          card.className = 'image-card';
+  if (data?.data?.length) {
+    for (const item of data.data) {
+      const card = document.createElement('div');
+      card.className = 'image-card';
 
-          const img = document.createElement('img');
-          img.src = item?.image?.source?.url || '';
-          img.alt = item.title || 'Image';
+      const img = document.createElement('img');
+      img.src = item?.image?.source?.url || '';
+      img.alt = item.title || 'Image';
 
-          const title = document.createElement('p');
-          title.innerText = item.title || 'Untitled';
+      const title = document.createElement('p');
+      title.innerText = item.title || 'Untitled';
 
-          const hash = 'fpimg-' + (await sha1(img.src)).slice(0, 6);
-          const isDuplicate = existingHashes.includes(hash);
+      const hash = 'fpimg-' + (await sha1(img.src)).slice(0, 6);
+      const isDuplicate = existingHashes.includes(hash);
 
-          if (isDuplicate) {
-            const existsTag = document.createElement("p");
-            existsTag.innerText = "❌ Already Exists in Shopify";
-            existsTag.style = "color: red; font-weight: bold; font-size: 13px; text-align: center;";
-            card.appendChild(img);
-            card.appendChild(title);
-            card.appendChild(existsTag);
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+
+      // If already in Shopify, tick it and show green status
+      if (isDuplicate) {
+        checkbox.checked = true;
+        selectedImages.push({
+          title: item.title,
+          imageUrl: item?.image?.source?.url
+        });
+
+        const existsTag = document.createElement("p");
+        existsTag.innerText = "✅ Already Exists in Shopify";
+        existsTag.style = "color: green; font-weight: bold; font-size: 13px; text-align: center;";
+        card.appendChild(img);
+        card.appendChild(title);
+        card.appendChild(existsTag);
+        card.appendChild(checkbox);
+      } else {
+        checkbox.onchange = (e) => {
+          if (e.target.checked) {
+            selectedImages.push({
+              title: item.title,
+              imageUrl: item?.image?.source?.url
+            });
           } else {
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.onchange = (e) => {
-              if (e.target.checked) {
-                selectedImages.push({
-                  title: item.title,
-                  imageUrl: item?.image?.source?.url
-                });
-              } else {
-                selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
-              }
-            };
-            card.appendChild(img);
-            card.appendChild(title);
-            card.appendChild(checkbox);
+            selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
           }
-
-          results.appendChild(card);
-        }
+        };
+        card.appendChild(img);
+        card.appendChild(title);
+        card.appendChild(checkbox);
       }
+
+      results.appendChild(card);
     }
+  }
+}
+
 
     function showToast(message, color = "green") {
       const toast = document.createElement("div");
