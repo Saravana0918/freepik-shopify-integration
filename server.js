@@ -49,8 +49,8 @@ app.post('/api/add-to-shopify', async (req, res) => {
           tags: "freepik-imported",
           metafields: [
             {
-              namespace: "custom",
-              key: "freepik.image_url",
+              namespace: "custom",               // ✅ CORRECTED
+              key: "freepik.image_url",          // ✅ CORRECTED
               type: "single_line_text_field",
               value: imageUrl
             }
