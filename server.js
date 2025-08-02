@@ -33,6 +33,29 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+app.get('/api/products', async (req, res) => {
+  try {
+    const response = await axios.get(
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=tags`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
+        }
+      }
+    );
+
+    const tags = new Set();
+    (response.data.products || []).forEach(p => {
+      (p.tags || "").split(",").forEach(t => tags.add(t.trim()));
+    });
+
+    res.json({ tags: Array.from(tags) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ tags: [] });
+  }
+});
+
 app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
