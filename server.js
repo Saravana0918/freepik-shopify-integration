@@ -125,6 +125,57 @@ app.get('/api/auth/callback', async (req, res) => {
   }
 });
 
+// ✅ Return all existing Shopify Freepik image hashes from metafields
+app.get('/api/shopify-hashes', async (req, res) => {
+  try {
+    const productsRes = await axios.get(
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?fields=id,title,metafields`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const products = productsRes.data.products || [];
+    const hashes = [];
+
+    // Now for each product, fetch metafields separately (Shopify limitation)
+    for (const product of products) {
+      try {
+        const metafieldsRes = await axios.get(
+          `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
+          {
+            headers: {
+              'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        const metafields = metafieldsRes.data.metafields || [];
+        const hashField = metafields.find(mf => mf.namespace === 'freepik' && mf.key === 'image_url');
+        if (hashField?.value) {
+          const hash = generateHash(hashField.value);
+          hashes.push(`fpimg-${hash}`);
+        }
+      } catch (err) {
+        console.error(`❌ Failed to fetch metafields for product ${product.id}`);
+      }
+    }
+
+    res.json(hashes);
+  } catch (error) {
+    console.error('❌ Failed to get Shopify hashes', error.message);
+    res.status(500).json({ error: 'Shopify API error' });
+  }
+});
+
+// ✅ Helper to hash Freepik image URL
+function generateHash(url) {
+  return crypto.createHash('md5').update(url).digest('hex').slice(0, 8);
+}
+
 // Serve frontend
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
