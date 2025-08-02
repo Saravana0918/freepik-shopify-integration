@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -8,117 +9,179 @@
     body {
       font-family: Arial, sans-serif;
       padding: 20px;
-      background: #f8f8f8;
+      background-color: #f8f8f8;
     }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #searchTerm {
+      padding: 8px;
+      width: 200px;
+    }
+    button {
+      padding: 8px 12px;
+      margin-left: 5px;
+      background-color: #1c73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #135dc2;
+    }
+
     .image-grid {
       display: flex;
       flex-wrap: wrap;
       gap: 20px;
+      justify-content: center;
+      margin-top: 20px;
     }
+
     .image-card {
-      width: 220px;
+      width: 240px;
       background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      padding: 10px;
-      text-align: center;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      transition: transform 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-bottom: 15px;
       position: relative;
     }
+
+    .image-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    }
+
     .image-card img {
       width: 100%;
-      height: 160px;
+      height: 200px;
       object-fit: cover;
-      border-radius: 4px;
     }
-    .exists-label {
-      color: red;
-      font-size: 12px;
-      font-weight: bold;
-      margin-top: 5px;
+
+    .image-card p {
+      font-size: 14px;
+      margin: 10px 10px 0;
+      padding: 0 10px;
+      height: 40px;
+      overflow: hidden;
+      text-align: center;
     }
-    .topbar {
-      margin-bottom: 20px;
-    }
-    button {
-      margin: 0 5px;
+
+    .image-card input[type="checkbox"] {
+      position: absolute;
+      bottom: 10px;
+      right: 12px;
+      transform: scale(1.4);
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
 
-  <div class="topbar">
-    <input id="searchTerm" placeholder="Search..." />
-    <button onclick="search()">Search</button>
-    <button onclick="addSelectedToShopify()">Add to Shopify</button>
-  </div>
+  <a href="/api/auth?shop=yogireddy.myshopify.com">
+    <button style="padding: 12px 24px; font-size: 18px; background-color: green; color: white;">
+      ✅ Install Freepik App on Shopify
+    </button>
+  </a>
+
+  <h1>Freepik Images</h1>
+  <input type="text" id="searchTerm" placeholder="Enter keyword..." />
+  <button onclick="search()">Search</button>
+  <button onclick="prevPage()">⬅️ Prev</button>
+  <button onclick="nextPage()">Next ➡️</button>
+  <span id="pageNum">Page: 1</span>
+  <button onclick="addSelectedToShopify()">Add Selected to Shopify</button>
 
   <div id="results" class="image-grid"></div>
 
   <script>
-    let existingHashes = [];
     let selectedImages = [];
+    let currentPage = 1;
+    let currentTerm = '';
 
-    async function fetchShopifyHashes() {
-      const res = await fetch("/api/shopify-hashes");
-      existingHashes = await res.json();
+    const getRandomTerm = () => {
+      const terms = ["jersey", "sports", "tshirt", "pattern", "design", "abstract", "background"];
+      return terms[Math.floor(Math.random() * terms.length)];
+    };
+
+    async function search(page = 1) {
+      const input = document.getElementById('searchTerm');
+      const typedTerm = input.value.trim();
+      currentTerm = typedTerm || currentTerm || getRandomTerm();
+      input.value = currentTerm;
+
+      document.getElementById("pageNum").textContent = `Page: ${page}`;
+
+      const res = await fetch(`/api/search?term=${encodeURIComponent(currentTerm)}&page=${page}`);
+      const data = await res.json();
+      renderResults(data);
+      currentPage = page;
     }
 
-    async function search() {
-      const term = document.getElementById("searchTerm").value || "jersey";
-      const res = await fetch(`/api/search?term=${encodeURIComponent(term)}`);
-      const data = await res.json();
-
-      const results = document.getElementById("results");
-      results.innerHTML = "";
+    function renderResults(data) {
+      const results = document.getElementById('results');
+      results.innerHTML = '';
       selectedImages = [];
 
-      for (const item of data.data || []) {
-        const url = item?.image?.source?.url;
-        const title = item.title;
-        const hash = "fpimg-" + md5(url).slice(0, 8);
+      if (data?.data?.length) {
+        data.data.forEach((item) => {
+          const card = document.createElement('div');
+          card.className = 'image-card';
 
-        const card = document.createElement("div");
-        card.className = "image-card";
+          const img = document.createElement('img');
+          img.src = item?.image?.source?.url || '';
+          img.alt = item.title || 'Image';
 
-        const img = document.createElement("img");
-        img.src = url;
+          const title = document.createElement('p');
+          title.innerText = item.title || 'Untitled';
 
-        const p = document.createElement("p");
-        p.textContent = title;
-
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-
-        if (existingHashes.includes(hash)) {
-          checkbox.disabled = true;
-          const label = document.createElement("div");
-          label.textContent = "❌ Already Exists in Shopify";
-          label.className = "exists-label";
-          card.appendChild(label);
-        } else {
-          checkbox.onchange = () => {
-            if (checkbox.checked) {
-              selectedImages.push({ title, imageUrl: url });
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.onchange = (e) => {
+            if (e.target.checked) {
+              selectedImages.push({
+                title: item.title,
+                imageUrl: item?.image?.source?.url
+              });
             } else {
-              selectedImages = selectedImages.filter(i => i.imageUrl !== url);
+              selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
             }
           };
-        }
 
-        card.appendChild(img);
-        card.appendChild(p);
-        card.appendChild(checkbox);
-        results.appendChild(card);
+          card.appendChild(img);
+          card.appendChild(title);
+          card.appendChild(checkbox);
+          results.appendChild(card);
+        });
       }
     }
 
+    function showToast(message, color = "green") {
+      const toast = document.createElement("div");
+      toast.textContent = message;
+      toast.style = `
+        position: fixed; top: 20px; right: 20px; z-index: 9999;
+        padding: 10px 18px; border-radius: 6px;
+        background:${color}; color:#fff; font-weight:600;
+        box-shadow:0 4px 12px rgba(0,0,0,.15);`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
     async function addSelectedToShopify() {
-      if (!selectedImages.length) {
-        alert("Select at least one image");
+      if (selectedImages.length === 0) {
+        showToast("⚠️ Select at least one image", "orange");
         return;
       }
 
       const item = selectedImages[0];
+
       const res = await fetch("/api/add-to-shopify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -126,44 +189,29 @@
       });
 
       const data = await res.json();
+
       if (data.success) {
-        alert("✅ Added to Shopify");
-        await fetchShopifyHashes();
-        search();
+        showToast("✅ Product added to Shopify.");
       } else {
-        alert("❌ Upload failed");
-        console.error(data);
+        showToast("❌ Upload failed.", "red");
+        console.error(data.error || "Unknown error");
       }
+
+      selectedImages = [];
+      document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
     }
 
-    function md5(str) {
-      return crypto.subtle.digest("MD5", new TextEncoder().encode(str)).then(buf => {
-        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-      });
+    function nextPage() {
+      search(currentPage + 1);
     }
 
-    // Fallback md5 if no crypto.subtle
-    function fallbackMd5(str) {
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        const chr = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + chr;
-        hash |= 0;
-      }
-      return hash.toString(16).slice(0, 8);
+    function prevPage() {
+      if (currentPage > 1) search(currentPage - 1);
     }
 
-    // Force fallback for compatibility
-    function md5Compat(str) {
-      try {
-        return fallbackMd5(str);
-      } catch (e) {
-        return fallbackMd5(str);
-      }
-    }
-
-    window.onload = async () => {
-      await fetchShopifyHashes();
+    window.onload = () => {
+      currentTerm = getRandomTerm();
+      search(1);
     };
   </script>
 </body>
