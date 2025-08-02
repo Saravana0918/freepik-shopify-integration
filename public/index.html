@@ -29,56 +29,61 @@
     button:hover {
       background-color: #135dc2;
     }
+
     .image-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  justify-content: center;
-  margin-top: 20px;
-}
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      margin-top: 20px;
+    }
 
     .image-card {
-  width: 240px;
-  background: white;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: transform 0.2s ease;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-bottom: 15px;
-  position: relative;
-}
-   .image-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
-}
-   .image-card img {
-  width: 100%;
-  height: 200px;
-  object-fit: cover;
-}
-   .image-card p {
-  font-size: 14px;
-  margin: 10px 10px 0;
-  padding: 0 10px;
-  height: 40px;
-  overflow: hidden;
-  text-align: center;
-}
+      width: 240px;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      transition: transform 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-bottom: 15px;
+      position: relative;
+    }
+
+    .image-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .image-card img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+    }
+
+    .image-card p {
+      font-size: 14px;
+      margin: 10px 10px 0;
+      padding: 0 10px;
+      height: 40px;
+      overflow: hidden;
+      text-align: center;
+    }
+
     .image-card input[type="checkbox"] {
-  position: absolute;
-  bottom: 10px;
-  right: 12px;
-  transform: scale(1.4);
-  cursor: pointer;
-}
+      position: absolute;
+      bottom: 10px;
+      right: 12px;
+      transform: scale(1.4);
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
 
-  <!-- Only for first-time install if needed -->
+  <!-- First-time install button -->
   <a href="/api/auth?shop=yogireddy.myshopify.com">
     <button style="padding: 12px 24px; font-size: 18px; background-color: green; color: white;">
       ✅ Install Freepik App on Shopify
@@ -124,7 +129,7 @@
       results.innerHTML = '';
       selectedImages = [];
 
-      if (data && data.data && Array.isArray(data.data)) {
+      if (data?.data?.length) {
         data.data.forEach((item) => {
           const card = document.createElement('div');
           card.className = 'image-card';
@@ -158,76 +163,57 @@
     }
 
     function showToast(message, color = "green") {
-  const toast = document.createElement("div");
-  toast.textContent = message;
-  toast.style = `
-    position: fixed; top: 20px; right: 20px; z-index: 9999;
-    padding: 10px 18px; border-radius: 6px;
-    background:${color}; color:#fff; font-weight:600;
-    box-shadow:0 4px 12px rgba(0,0,0,.15);`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
-}
+      const toast = document.createElement("div");
+      toast.textContent = message;
+      toast.style = `
+        position: fixed; top: 20px; right: 20px; z-index: 9999;
+        padding: 10px 18px; border-radius: 6px;
+        background:${color}; color:#fff; font-weight:600;
+        box-shadow:0 4px 12px rgba(0,0,0,.15);`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
 
-async function getExistingFreepikTags() {
-  const res = await fetch("/api/products");
-  const data = await res.json();
-  return data.tags || [];
-}
+    async function addSelectedToShopify() {
+      if (selectedImages.length === 0) {
+        showToast("⚠️ Select at least one image", "orange");
+        return;
+      }
 
-async function cryptoDigest(input) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return [...new Uint8Array(hashBuffer)]
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
+      if (selectedImages.length > 1) {
+        showToast("⚠️ Please add one image at a time to avoid Shopify limit.", "orange");
+        return;
+      }
 
+      const item = selectedImages[0];
 
-async function addSelectedToShopify() {
-  if (selectedImages.length === 0) {
-    showToast("⚠️ Select at least one image", "orange");
-    return;
-  }
+      const res = await fetch("/api/add-to-shopify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item)
+      });
 
-  if (selectedImages.length > 1) {
-    showToast("⚠️ Please add one image at a time to avoid Shopify limit.", "orange");
-    return;
-  }
+      const data = await res.json();
 
-  const item = selectedImages[0];
+      if (data.success) {
+        showToast("✅ Product added to Shopify.");
+      } else if (data.duplicate) {
+        showToast("⚠️ This image already exists in Shopify.", "orange");
+      } else {
+        showToast("❌ Upload failed.", "red");
+        console.error(data.error || "Unknown error");
+      }
 
-  const res = await fetch("/api/add-to-shopify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(item)
-  });
-
-  const data = await res.json();
-
-  if (data.success) {
-    showToast("✅ Product added to Shopify.");
-  } else if (data.duplicate) {
-    showToast("⚠️ This image already exists in Shopify.", "orange");
-  } else {
-    showToast("❌ Upload failed.", "red");
-    console.error(data.error || "Unknown error");
-  }
-
-  selectedImages = [];
-  document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
-}
-
+      selectedImages = [];
+      document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+    }
 
     function nextPage() {
       search(currentPage + 1);
     }
 
     function prevPage() {
-      if (currentPage > 1) {
-        search(currentPage - 1);
-      }
+      if (currentPage > 1) search(currentPage - 1);
     }
 
     window.onload = () => {
