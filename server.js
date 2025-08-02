@@ -19,10 +19,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Short hash for Shopify-friendly tags (12 chars max after prefix)
 function hashImageUrl(url) {
-  return 'fpimg-' + crypto.createHash('sha256').update(url.trim().toLowerCase()).digest('hex').slice(0, 12);
+  // Remove query params, enforce base domain and lowercase
+  const normalized = url.split('?')[0].replace('https://img.freepik.com/premium', 'https://img.freepik.com/free').toLowerCase();
+  return 'fpimg-' + crypto.createHash('md5').update(normalized).digest('hex');
 }
+
 
 // ✅ Route: Freepik search with duplicate detection
 app.get('/api/search', async (req, res) => {
