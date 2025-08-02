@@ -19,28 +19,30 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Generate consistent short hash for image URL
+// ✅ Generate short hash for image URL
 function hashImageUrl(url) {
   return 'fpimg-' + crypto.createHash('md5').update(url).digest('hex');
 }
 
-// ✅ Freepik search with Shopify duplicate detection (based on tags)
+// ✅ Route: Search Freepik & Detect Shopify Duplicates
 app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
 
   try {
-    // Step 1: Fetch Freepik Results
-    const freepikResponse = await axios.get(
-      `https://api.freepik.com/v1/resources/search?term=${encodeURIComponent(term)}&limit=60&page=${page}`,
+    // ✅ 1. Freepik search
+    const freepikRes = await axios.get(
+      `https://api.freepik.com/v1/resources?term=${encodeURIComponent(term)}&order=relevance&limit=60&page=${page}`,
       {
-        headers: { 'x-freepik-api-key': process.env.FREEPIK_API_KEY }
+        headers: {
+          'x-freepik-api-key': process.env.FREEPIK_API_KEY
+        }
       }
     );
 
-    const freepikResults = freepikResponse.data?.data || [];
+    const freepikData = freepikRes.data?.data || [];
 
-    // Step 2: Get all Shopify products’ tags (with pagination)
+    // ✅ 2. Collect Shopify products' tags
     let existingHashTags = new Set();
     let shopifyUrl = `https://${process.env.SHOPIFY_STORE}/admin/api/2023-10/products.json?limit=250&fields=id,tags`;
     let pageCount = 0;
@@ -53,7 +55,8 @@ app.get('/api/search', async (req, res) => {
       });
 
       const products = shopifyRes.data.products || [];
-      products.forEach(product => {
+
+      for (const product of products) {
         const tags = product.tags?.split(',') || [];
         tags.forEach(tag => {
           const cleaned = tag.trim();
@@ -61,17 +64,17 @@ app.get('/api/search', async (req, res) => {
             existingHashTags.add(cleaned);
           }
         });
-      });
+      }
 
-      // Handle pagination with Link header
+      // Pagination logic
       const linkHeader = shopifyRes.headers.link;
       const nextLink = linkHeader?.match(/<([^>]+)>;\s*rel="next"/);
       shopifyUrl = nextLink ? nextLink[1] : null;
       pageCount++;
     }
 
-    // Step 3: Add `duplicate` flag based on image hash tag
-    const resultsWithStatus = freepikResults.map(item => {
+    // ✅ 3. Compare and mark duplicates
+    const resultsWithStatus = freepikData.map(item => {
       const imageUrl = item?.image?.source?.url;
       const hashTag = hashImageUrl(imageUrl);
       return {
@@ -84,7 +87,7 @@ app.get('/api/search', async (req, res) => {
 
   } catch (error) {
     console.error('❌ /api/search error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Freepik API or Shopify API error' });
+    res.status(500).json({ error: 'Freepik or Shopify API failed' });
   }
 });
 
