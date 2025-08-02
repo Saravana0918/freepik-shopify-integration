@@ -29,9 +29,6 @@ app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
 
-  console.log("🔍 Term:", term);
-  console.log("🔑 Freepik Key Loaded:", process.env.FREEPIK_API_KEY); // ADD THIS LINE
-
   try {
     const response = await axios.get(
       `https://api.freepik.com/v1/resources?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`,
