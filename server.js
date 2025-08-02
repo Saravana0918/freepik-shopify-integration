@@ -34,10 +34,14 @@ app.get('/api/search', async (req, res) => {
 });
 
 app.post('/api/add-to-shopify', async (req, res) => {
-  const { title, imageUrl } = req.body;
+  let { title, imageUrl } = req.body;
+
+  if (!title || title.trim() === '') {
+    title = 'Freepik Imported Product';
+  }
 
   try {
-    // Step 1: Fetch all products tagged as "freepik-imported"
+    // Step 1: Fetch all products with freepik tag
     const productsRes = await axios.get(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,title,tags`,
       {
@@ -49,9 +53,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     const products = productsRes.data.products || [];
 
-    // Step 2: Loop through each product and check their metafields
     for (const product of products) {
-      // Only check Freepik-tagged products
       if (!product.tags.includes('freepik-imported')) continue;
 
       const metafieldsRes = await axios.get(
@@ -68,12 +70,11 @@ app.post('/api/add-to-shopify', async (req, res) => {
       );
 
       if (match) {
-        // ❌ Duplicate found
         return res.json({ status: 'duplicate', message: '❌ Already exists in Shopify' });
       }
     }
 
-    // Step 3: No duplicate → create new product
+    // Step 2: No duplicate, create new product
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
@@ -100,7 +101,6 @@ app.post('/api/add-to-shopify', async (req, res) => {
       }
     );
 
-    // ✅ Success
     res.json({ status: 'added', message: '✅ Product added to Shopify' });
 
   } catch (error) {
