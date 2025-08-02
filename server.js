@@ -18,7 +18,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Freepik image search
+// 🔐 Utility to generate short hash for Freepik image URL
+function getShortHash(imageUrl) {
+  const fullHash = crypto.createHash('sha1').update(imageUrl).digest('hex');
+  return `fpimg-${fullHash.slice(0, 6)}`;
+}
+
+// ✅ Freepik image search
 app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
@@ -33,11 +39,13 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// ✅ Always add product (no duplicate check)
+// ✅ Add product to Shopify with hash tag
 app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
   try {
+    const hashTag = getShortHash(imageUrl); // ⬅️ generate short hash tag
+
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
@@ -45,7 +53,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
           title,
           status: "active",
           images: [{ src: imageUrl }],
-          tags: "freepik-imported",
+          tags: `freepik-imported,${hashTag}`,
           metafields: [
             {
               namespace: "freepik",
@@ -76,7 +84,51 @@ app.post('/api/add-to-shopify', async (req, res) => {
   }
 });
 
-// OAuth install
+// ✅ Return all existing hash tags from Shopify products
+app.get('/api/shopify-hashes', async (req, res) => {
+  try {
+    const allHashes = [];
+    let endpoint = `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250`;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      const response = await axios.get(endpoint, {
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
+        }
+      });
+
+      const products = response.data.products || [];
+      products.forEach(product => {
+        const tags = product.tags.split(',').map(t => t.trim());
+        tags.forEach(tag => {
+          if (tag.startsWith("fpimg-")) {
+            allHashes.push(tag);
+          }
+        });
+      });
+
+      const linkHeader = response.headers.link;
+      if (linkHeader && linkHeader.includes('rel="next"')) {
+        const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+        if (match) {
+          endpoint = match[1];
+        } else {
+          hasNextPage = false;
+        }
+      } else {
+        hasNextPage = false;
+      }
+    }
+
+    res.json({ hashes: allHashes });
+  } catch (error) {
+    console.error('Error fetching Shopify products:', error.message);
+    res.status(500).json({ hashes: [] });
+  }
+});
+
+// ✅ OAuth install
 app.get('/api/auth', (req, res) => {
   const shop = req.query.shop;
   if (!shop) return res.status(400).send('Missing shop parameter');
@@ -89,7 +141,7 @@ app.get('/api/auth', (req, res) => {
   res.redirect(redirectUrl);
 });
 
-// OAuth callback
+// ✅ OAuth callback
 app.get('/api/auth/callback', async (req, res) => {
   const { shop, hmac, code } = req.query;
   if (!shop || !hmac || !code) {
@@ -124,7 +176,7 @@ app.get('/api/auth/callback', async (req, res) => {
   }
 });
 
-// Serve frontend
+// ✅ Serve frontend
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
