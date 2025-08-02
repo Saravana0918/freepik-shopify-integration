@@ -83,7 +83,6 @@
 </head>
 <body>
 
-  <!-- First-time install button -->
   <a href="/api/auth?shop=yogireddy.myshopify.com">
     <button style="padding: 12px 24px; font-size: 18px; background-color: green; color: white;">
       ✅ Install Freepik App on Shopify
@@ -180,11 +179,6 @@
         return;
       }
 
-      if (selectedImages.length > 1) {
-        showToast("⚠️ Please add one image at a time to avoid Shopify limit.", "orange");
-        return;
-      }
-
       const item = selectedImages[0];
 
       const res = await fetch("/api/add-to-shopify", {
@@ -197,8 +191,6 @@
 
       if (data.success) {
         showToast("✅ Product added to Shopify.");
-      } else if (data.duplicate) {
-        showToast("⚠️ This image already exists in Shopify.", "orange");
       } else {
         showToast("❌ Upload failed.", "red");
         console.error(data.error || "Unknown error");
