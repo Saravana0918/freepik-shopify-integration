@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
@@ -19,13 +18,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Freepik image search
+// 🔍 Freepik image search API
 app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
   try {
     const response = await axios.get(
-      `https://api.freepik.com/v1/resources?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`,
+      `https://api.freepik.com/v1/resources/search?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`,
       { headers: { 'x-freepik-api-key': process.env.FREEPIK_API_KEY } }
     );
     res.json(response.data);
@@ -34,7 +33,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// ✅ Always add product (no duplicate check)
+// ✅ Add selected image as product in Shopify
 app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
@@ -49,8 +48,8 @@ app.post('/api/add-to-shopify', async (req, res) => {
           tags: "freepik-imported",
           metafields: [
             {
-              namespace: "custom",               // ✅ CORRECTED
-              key: "freepik.image_url",          // ✅ CORRECTED
+              namespace: "custom",
+              key: "freepik.image_url",
               type: "single_line_text_field",
               value: imageUrl
             }
@@ -77,57 +76,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
   }
 });
 
-
-// OAuth install
-app.get('/api/auth', (req, res) => {
-  const shop = req.query.shop;
-  if (!shop) return res.status(400).send('Missing shop parameter');
-
-  const redirectUrl = `https://${shop}/admin/oauth/authorize` +
-    `?client_id=${process.env.SHOPIFY_API_KEY}` +
-    `&scope=read_products,write_products` +
-    `&redirect_uri=${process.env.REDIRECT_URI}`;
-
-  res.redirect(redirectUrl);
-});
-
-// OAuth callback
-app.get('/api/auth/callback', async (req, res) => {
-  const { shop, hmac, code } = req.query;
-  if (!shop || !hmac || !code) {
-    return res.status(400).send('Missing required parameters');
-  }
-
-  const params = { ...req.query };
-  delete params.hmac;
-  const message = Object.keys(params).sort().map(key => `${key}=${params[key]}`).join('&');
-
-  const generatedHash = crypto
-    .createHmac('sha256', process.env.SHOPIFY_API_SECRET)
-    .update(message)
-    .digest('hex');
-
-  if (generatedHash !== hmac) {
-    return res.status(400).send('HMAC validation failed');
-  }
-
-  try {
-    const tokenRes = await axios.post(`https://${shop}/admin/oauth/access_token`, {
-      client_id: process.env.SHOPIFY_API_KEY,
-      client_secret: process.env.SHOPIFY_API_SECRET,
-      code
-    });
-
-    const accessToken = tokenRes.data.access_token;
-    console.log("✅ App installed! Access Token:", accessToken);
-    res.send("✅ App installed successfully. You can close this tab.");
-  } catch (error) {
-    res.status(500).send("OAuth process failed");
-  }
-});
-
-// ✅ Return all existing Shopify Freepik image hashes from metafields
-
+// ✅ Metafield-based hash list for frontend duplicate detection
 app.get("/api/shopify-hashes", async (req, res) => {
   try {
     const productRes = await axios.get(
@@ -158,14 +107,6 @@ app.get("/api/shopify-hashes", async (req, res) => {
         );
 
         const metafields = metafieldsRes.data.metafields || [];
-
-        // 🔍 Log each metafield key/value
-        console.log(`🧠 Product ${id} Metafields:`);
-        metafields.forEach(m => {
-          console.log(`   ${m.key} = ${m.value}`);
-        });
-
-        // ✅ Match the actual Freepik metafield key
         const match = metafields.find(
           mf => mf.key === "freepik.image_url" && typeof mf.value === "string"
         );
@@ -174,33 +115,24 @@ app.get("/api/shopify-hashes", async (req, res) => {
           const hash = crypto.createHash("md5").update(match.value).digest("hex").slice(0, 8);
           const tag = "fpimg-" + hash;
           hashes.push(tag);
-          console.log(`✅ Matched product ${id}: ${tag}`);
-        } else {
-          console.log(`❌ No valid Freepik image URL on product ${id}`);
         }
-
       } catch (e) {
-        console.warn(`⚠️ Failed metafield fetch for product ${id}:`, e.message);
+        console.warn(`⚠️ Skipped product ${id}`);
       }
     }
 
-    console.log("✅ FINAL HASH LIST:", hashes);
     res.json(hashes);
   } catch (err) {
     console.error("❌ Error in /api/shopify-hashes:", err.message);
     res.status(500).json({ error: "Shopify API failed" });
   }
 });
-// ✅ Helper to hash Freepik image URL
-function generateHash(url) {
-  return crypto.createHash('md5').update(url).digest('hex').slice(0, 8);
-}
 
-// Serve frontend
+// ✅ Serve frontend
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server is running at http://localhost:${PORT}`);
+  console.log(`✅ Server running at http://localhost:${PORT}`);
 });
