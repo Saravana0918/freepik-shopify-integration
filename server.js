@@ -158,23 +158,32 @@ app.get("/api/shopify-hashes", async (req, res) => {
 
         const metafields = metafieldsRes.data.metafields || [];
 
-        // 🔍 Match both possible storage formats
+        // 🧠 Log all keys to see what's actually present
+        console.log(`🔍 Product ${id} metafields:`);
+        metafields.forEach(m => {
+          console.log(`   - ${m.namespace}:${m.key} = ${m.value}`);
+        });
+
+        // ✅ TEMPORARY: match any metafield that contains a Freepik-style image URL
         const match = metafields.find(
-          mf =>
-            (mf.namespace === "freepik" && mf.key === "image_url") ||
-            mf.key === "freepik.image_url"
+          m => typeof m.value === "string" && (
+            m.value.includes("freepik") ||
+            m.value.includes("b2bpic") ||
+            m.key.includes("freepik")
+          )
         );
 
         if (match?.value) {
           const hash = crypto.createHash("md5").update(match.value).digest("hex").slice(0, 8);
-          const tag = "fpimg-" + hash;
-          hashes.push(tag);
-          console.log(`✅ Found for Product ${id}: ${tag}`);
+          const final = "fpimg-" + hash;
+          hashes.push(final);
+          console.log(`✅ Found image hash for product ${id}: ${final}`);
         } else {
-          console.log(`ℹ️ No matching metafield on Product ${id}`);
+          console.log(`ℹ️ No matching image metafield on product ${id}`);
         }
+
       } catch (e) {
-        console.warn(`⚠️ Failed metafield fetch for product ${id}:`, e.message);
+        console.warn(`⚠️ Failed metafield fetch for product ${id}: ${e.message}`);
       }
     }
 
