@@ -22,16 +22,67 @@ app.use((req, res, next) => {
 app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
+
   try {
+    // Step 1: Get Freepik results
     const response = await axios.get(
       `https://api.freepik.com/v1/resources?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`,
-      { headers: { 'x-freepik-api-key': process.env.FREEPIK_API_KEY } }
+      {
+        headers: { 'x-freepik-api-key': process.env.FREEPIK_API_KEY }
+      }
     );
-    res.json(response.data);
+
+    const freepikResults = response.data?.data || [];
+
+    // Step 2: Get all Shopify products tagged with 'freepik-imported'
+    const shopifyProductsRes = await axios.get(
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,tags`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
+        }
+      }
+    );
+
+    const existingImageUrls = [];
+
+    for (const product of shopifyProductsRes.data.products || []) {
+      if (!product.tags.includes('freepik-imported')) continue;
+
+      const metafieldsRes = await axios.get(
+        `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
+          }
+        }
+      );
+
+      for (const mf of metafieldsRes.data.metafields) {
+        if (mf.namespace === 'freepik' && mf.key === 'image_url') {
+          existingImageUrls.push(mf.value);
+        }
+      }
+    }
+
+    // Step 3: Add duplicate status to Freepik results
+    const resultsWithStatus = freepikResults.map(item => {
+      const imageUrl = item?.image?.source?.url;
+      const isDuplicate = existingImageUrls.includes(imageUrl);
+      return {
+        ...item,
+        duplicate: isDuplicate
+      };
+    });
+
+    res.json({ data: resultsWithStatus });
+
   } catch (error) {
+    console.error('❌ Search API error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Freepik API error', detail: error.response?.data || error.message });
   }
 });
+
 
 app.post('/api/add-to-shopify', async (req, res) => {
   let { title, imageUrl } = req.body;
