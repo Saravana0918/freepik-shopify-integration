@@ -37,23 +37,43 @@ app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
   try {
-    // Step 1: Search for existing product with the same metafield value
-    const metafieldRes = await axios.get(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json?namespace=freepik&key=image_url&value=${encodeURIComponent(imageUrl)}`,
+    // Step 1: Fetch all products tagged as "freepik-imported"
+    const productsRes = await axios.get(
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,title,tags`,
       {
         headers: {
-          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
-          'Content-Type': 'application/json'
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
         }
       }
     );
 
-    if (metafieldRes.data.metafields && metafieldRes.data.metafields.length > 0) {
-      // ✅ Duplicate found
-      return res.json({ status: 'duplicate', message: '❌ Already exists in Shopify' });
+    const products = productsRes.data.products || [];
+
+    // Step 2: Loop through each product and check their metafields
+    for (const product of products) {
+      // Only check Freepik-tagged products
+      if (!product.tags.includes('freepik-imported')) continue;
+
+      const metafieldsRes = await axios.get(
+        `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
+          }
+        }
+      );
+
+      const match = metafieldsRes.data.metafields.find(
+        m => m.namespace === 'freepik' && m.key === 'image_url' && m.value === imageUrl
+      );
+
+      if (match) {
+        // ❌ Duplicate found
+        return res.json({ status: 'duplicate', message: '❌ Already exists in Shopify' });
+      }
     }
 
-    // Step 2: Create new product
+    // Step 3: No duplicate → create new product
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
@@ -80,11 +100,11 @@ app.post('/api/add-to-shopify', async (req, res) => {
       }
     );
 
-    // ✅ Product added
+    // ✅ Success
     res.json({ status: 'added', message: '✅ Product added to Shopify' });
 
   } catch (error) {
-    console.error('Shopify API error:', error.response?.data || error.message);
+    console.error('❌ Shopify API error:', error.response?.data || error.message);
     res.status(500).json({
       status: 'error',
       message: '❌ Failed to add product',
@@ -92,6 +112,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
     });
   }
 });
+
 
 
 // OAuth install
