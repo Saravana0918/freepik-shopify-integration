@@ -101,6 +101,17 @@
 
   <script>
     let selectedImages = [];
+    let existingHashes = [];
+
+async function fetchShopifyHashes() {
+  try {
+    const res = await fetch('/api/shopify-hashes');
+    existingHashes = await res.json();
+  } catch (e) {
+    console.error("❌ Could not fetch Shopify hashes");
+  }
+}
+
     let currentPage = 1;
     let currentTerm = '';
 
@@ -140,18 +151,29 @@
           const title = document.createElement('p');
           title.innerText = item.title || 'Untitled';
 
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.onchange = (e) => {
-            if (e.target.checked) {
-              selectedImages.push({
-                title: item.title,
-                imageUrl: item?.image?.source?.url
-              });
-            } else {
-              selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
-            }
-          };
+const imageUrl = item?.image?.source?.url;
+const hash = "fpimg-" + md5(imageUrl).slice(0, 8);
+
+const checkbox = document.createElement('input');
+checkbox.type = 'checkbox';
+
+if (existingHashes.includes(hash)) {
+  checkbox.disabled = true;
+  const existsLabel = document.createElement('div');
+  existsLabel.textContent = "❌ Already Exists in Shopify";
+  existsLabel.style = "color: red; font-size: 12px; font-weight: bold; margin-top: 5px;";
+  card.appendChild(existsLabel);
+} else {
+  checkbox.onchange = (e) => {
+    if (e.target.checked) {
+      selectedImages.push({ title: item.title, imageUrl });
+    } else {
+      selectedImages = selectedImages.filter(i => i.imageUrl !== imageUrl);
+    }
+  };
+}
+
+
 
           card.appendChild(img);
           card.appendChild(title);
@@ -208,10 +230,13 @@
       if (currentPage > 1) search(currentPage - 1);
     }
 
-    window.onload = () => {
-      currentTerm = getRandomTerm();
-      search(1);
-    };
+    window.onload = async () => {
+  await fetchShopifyHashes();
+  currentTerm = getRandomTerm();
+  search(1);
+};
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
+
   </script>
 </body>
 </html>
