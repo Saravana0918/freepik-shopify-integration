@@ -19,20 +19,16 @@ app.use((req, res, next) => {
   next();
 });
 
+// ✅ Generate consistent short hash for image URL
 function hashImageUrl(url) {
-  // Remove query params, enforce base domain and lowercase
-  const normalized = url.split('?')[0].replace('https://img.freepik.com/premium', 'https://img.freepik.com/free').toLowerCase();
-  return 'fpimg-' + crypto.createHash('md5').update(normalized).digest('hex');
+  return 'fpimg-' + crypto.createHash('md5').update(url).digest('hex');
 }
 
-
-// ✅ Route: Freepik search with duplicate detection
 app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
 
   try {
-    // 1. Get Freepik Results
     const freepikResponse = await axios.get(
       `https://api.freepik.com/v1/resources?order=relevance&limit=60&page=${page}&term=${encodeURIComponent(term)}`,
       {
@@ -42,12 +38,12 @@ app.get('/api/search', async (req, res) => {
 
     const freepikResults = freepikResponse.data?.data || [];
 
-    // 2. Get all product tags from Shopify using pagination
+    // ✅ Fetch existing tags from Shopify (with pagination)
     let existingHashTags = [];
     let shopifyUrl = `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,tags`;
     let pageCount = 0;
 
-    while (shopifyUrl && pageCount < 5) {  // prevent infinite loop, max 1250 products
+    while (shopifyUrl && pageCount < 5) {
       const shopifyRes = await axios.get(shopifyUrl, {
         headers: {
           'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
@@ -55,6 +51,7 @@ app.get('/api/search', async (req, res) => {
       });
 
       const products = shopifyRes.data.products || [];
+
       for (const product of products) {
         if (product.tags) {
           product.tags.split(',').forEach(tag => {
@@ -66,15 +63,11 @@ app.get('/api/search', async (req, res) => {
         }
       }
 
-      // Check for pagination using Shopify's Link header
+      // Pagination: Find next page
       const linkHeader = shopifyRes.headers.link;
       if (linkHeader && linkHeader.includes('rel="next"')) {
         const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-        if (match && match[1]) {
-          shopifyUrl = match[1];
-        } else {
-          break;
-        }
+        shopifyUrl = match?.[1] || null;
       } else {
         break;
       }
@@ -82,7 +75,7 @@ app.get('/api/search', async (req, res) => {
       pageCount++;
     }
 
-    // 3. Compare Freepik image hashes with existing Shopify product tags
+    // ✅ Tag matching
     const resultsWithStatus = freepikResults.map(item => {
       const imageUrl = item?.image?.source?.url;
       const hashTag = hashImageUrl(imageUrl);
@@ -99,6 +92,7 @@ app.get('/api/search', async (req, res) => {
     res.status(500).json({ error: 'Freepik API or Shopify API error' });
   }
 });
+
 
 
 // ✅ Route: Add product to Shopify and tag with image hash
