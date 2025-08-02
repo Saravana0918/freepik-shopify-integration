@@ -35,7 +35,33 @@ app.get('/api/search', async (req, res) => {
 
 app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
+
   try {
+    // Step 1: Check if product with the same image already exists
+    const existingRes = await axios.get(
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?fields=id,title,image&limit=250`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
+        }
+      }
+    );
+
+    const existingProducts = existingRes.data.products || [];
+
+    const isDuplicate = existingProducts.some(p =>
+      p.image && p.image.src === imageUrl
+    );
+
+    if (isDuplicate) {
+      return res.json({
+        success: false,
+        duplicate: true,
+        message: '⚠️ Product with this image already exists in Shopify.'
+      });
+    }
+
+    // Step 2: Create the product if not a duplicate
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
@@ -52,7 +78,9 @@ app.post('/api/add-to-shopify', async (req, res) => {
         }
       }
     );
+
     res.json({ success: true, message: '✅ Added to Shopify successfully!' });
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -61,6 +89,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
     });
   }
 });
+
 
 app.get('/api/auth', (req, res) => {
   const shop = req.query.shop;
