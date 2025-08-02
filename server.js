@@ -60,11 +60,9 @@ app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
   try {
-   const hash = crypto.createHash('sha256').update(imageUrl).digest('hex');
-    const tag = `freepik-${hash}`;
-
+    // Step 1: Fetch all products (limit 250)
     const existingRes = await axios.get(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,title,tags`,
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,title`,
       {
         headers: {
           'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
@@ -74,27 +72,49 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     const products = existingRes.data.products || [];
 
-    const found = products.find(p => {
-      const tags = (p.tags || "").split(",").map(t => t.trim());
-      return tags.includes(tag);
-    });
+    // Step 2: Loop through and fetch metafields of each product
+    for (const product of products) {
+      const metafieldsRes = await axios.get(
+        `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
+          }
+        }
+      );
 
-    if (found) {
-      return res.json({
-        success: false,
-        duplicate: true,
-        message: '⚠️ This image has already been added to Shopify.'
-      });
+      const metas = metafieldsRes.data.metafields || [];
+      const found = metas.find(m =>
+        m.namespace === "freepik" &&
+        m.key === "image_url" &&
+        m.value === imageUrl
+      );
+
+      if (found) {
+        return res.json({
+          success: false,
+          duplicate: true,
+          message: '⚠️ This image is already added as a product.'
+        });
+      }
     }
 
+    // Step 3: If not found, create product with metafield
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
         product: {
-          title: title,
+          title,
           status: "active",
-          tags: tag,
-          images: [{ src: imageUrl }]
+          images: [{ src: imageUrl }],
+          metafields: [
+            {
+              namespace: "freepik",
+              key: "image_url",
+              type: "single_line_text_field",
+              value: imageUrl
+            }
+          ]
         }
       },
       {
@@ -105,13 +125,13 @@ app.post('/api/add-to-shopify', async (req, res) => {
       }
     );
 
-    res.json({ success: true, message: '✅ Added to Shopify successfully!' });
+    res.json({ success: true, message: '✅ Product added to Shopify.' });
 
   } catch (error) {
-    console.error("❌ Shopify Add Error:", error?.response?.data || error.message);
+    console.error('Shopify API error:', error.response?.data || error.message);
     res.status(500).json({
       success: false,
-      message: '❌ Failed to add to Shopify',
+      message: '❌ Failed to add product',
       error: error.response?.data || error.message
     });
   }
