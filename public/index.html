@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -30,7 +29,6 @@
     button:hover {
       background-color: #135dc2;
     }
-
     .image-grid {
       display: flex;
       flex-wrap: wrap;
@@ -38,7 +36,6 @@
       justify-content: center;
       margin-top: 20px;
     }
-
     .image-card {
       width: 240px;
       background: white;
@@ -52,18 +49,15 @@
       padding-bottom: 15px;
       position: relative;
     }
-
     .image-card:hover {
       transform: translateY(-4px);
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
     }
-
     .image-card img {
       width: 100%;
       height: 200px;
       object-fit: cover;
     }
-
     .image-card p {
       font-size: 14px;
       margin: 10px 10px 0;
@@ -72,7 +66,6 @@
       overflow: hidden;
       text-align: center;
     }
-
     .image-card input[type="checkbox"] {
       position: absolute;
       bottom: 10px;
@@ -104,6 +97,20 @@
     let selectedImages = [];
     let currentPage = 1;
     let currentTerm = '';
+    let existingHashes = [];
+
+    async function sha1(message) {
+      const msgBuffer = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest("SHA-1", msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    async function fetchExistingHashes() {
+      const res = await fetch("/api/shopify-hashes");
+      const data = await res.json();
+      existingHashes = data.hashes || [];
+    }
 
     const getRandomTerm = () => {
       const terms = ["jersey", "sports", "tshirt", "pattern", "design", "abstract", "background"];
@@ -124,13 +131,13 @@
       currentPage = page;
     }
 
-    function renderResults(data) {
+    async function renderResults(data) {
       const results = document.getElementById('results');
       results.innerHTML = '';
       selectedImages = [];
 
       if (data?.data?.length) {
-        data.data.forEach((item) => {
+        for (const item of data.data) {
           const card = document.createElement('div');
           card.className = 'image-card';
 
@@ -141,24 +148,36 @@
           const title = document.createElement('p');
           title.innerText = item.title || 'Untitled';
 
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.onchange = (e) => {
-            if (e.target.checked) {
-              selectedImages.push({
-                title: item.title,
-                imageUrl: item?.image?.source?.url
-              });
-            } else {
-              selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
-            }
-          };
+          const hash = 'fpimg-' + (await sha1(img.src)).slice(0, 6);
+          const isDuplicate = existingHashes.includes(hash);
 
-          card.appendChild(img);
-          card.appendChild(title);
-          card.appendChild(checkbox);
+          if (isDuplicate) {
+            const existsTag = document.createElement("p");
+            existsTag.innerText = "❌ Already Exists in Shopify";
+            existsTag.style = "color: red; font-weight: bold; font-size: 13px; text-align: center;";
+            card.appendChild(img);
+            card.appendChild(title);
+            card.appendChild(existsTag);
+          } else {
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.onchange = (e) => {
+              if (e.target.checked) {
+                selectedImages.push({
+                  title: item.title,
+                  imageUrl: item?.image?.source?.url
+                });
+              } else {
+                selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
+              }
+            };
+            card.appendChild(img);
+            card.appendChild(title);
+            card.appendChild(checkbox);
+          }
+
           results.appendChild(card);
-        });
+        }
       }
     }
 
@@ -181,7 +200,6 @@
       }
 
       const item = selectedImages[0];
-
       const res = await fetch("/api/add-to-shopify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -189,9 +207,10 @@
       });
 
       const data = await res.json();
-
       if (data.success) {
         showToast("✅ Product added to Shopify.");
+        await fetchExistingHashes(); // update after new insert
+        search(currentPage); // re-render to reflect duplicate
       } else {
         showToast("❌ Upload failed.", "red");
         console.error(data.error || "Unknown error");
@@ -209,7 +228,8 @@
       if (currentPage > 1) search(currentPage - 1);
     }
 
-    window.onload = () => {
+    window.onload = async () => {
+      await fetchExistingHashes();
       currentTerm = getRandomTerm();
       search(1);
     };
