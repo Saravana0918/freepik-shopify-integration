@@ -29,7 +29,6 @@
     button:hover {
       background-color: #135dc2;
     }
-
     .image-grid {
       display: flex;
       flex-wrap: wrap;
@@ -37,7 +36,6 @@
       justify-content: center;
       margin-top: 20px;
     }
-
     .image-card {
       width: 240px;
       background: white;
@@ -51,18 +49,15 @@
       padding-bottom: 15px;
       position: relative;
     }
-
     .image-card:hover {
       transform: translateY(-4px);
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
     }
-
     .image-card img {
       width: 100%;
       height: 200px;
       object-fit: cover;
     }
-
     .image-card p {
       font-size: 14px;
       margin: 10px 10px 0;
@@ -71,7 +66,6 @@
       overflow: hidden;
       text-align: center;
     }
-
     .image-card input[type="checkbox"] {
       position: absolute;
       bottom: 10px;
@@ -123,63 +117,61 @@
       currentPage = page;
     }
 
-function renderResults(data) {
-  const results = document.getElementById('results');
-  results.innerHTML = '';
-  selectedImages = [];
+    function renderResults(data) {
+      const results = document.getElementById('results');
+      results.innerHTML = '';
+      selectedImages = [];
 
-  if (data?.data?.length) {
-    data.data.forEach((item) => {
-      const card = document.createElement('div');
-      card.className = 'image-card';
+      if (data?.data?.length) {
+        data.data.forEach((item) => {
+          const card = document.createElement('div');
+          card.className = 'image-card';
 
-      const imageUrl = item?.image?.source?.url || '';
-      const titleText = item.title || 'Freepik Imported Product';
+          const imageUrl = item?.image?.source?.url || '';
+          const titleText = item.title || 'Freepik Imported Product';
 
-      card.setAttribute('data-image-url', imageUrl);
-      card.setAttribute('data-title', titleText);
+          card.setAttribute('data-image-url', imageUrl);
+          card.setAttribute('data-title', titleText);
 
-      const img = document.createElement('img');
-      img.src = imageUrl;
-      img.alt = titleText;
+          const img = document.createElement('img');
+          img.src = imageUrl;
+          img.alt = titleText;
 
-      const title = document.createElement('p');
-      title.innerText = titleText;
+          const title = document.createElement('p');
+          title.innerText = titleText;
 
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
 
-      if (item.duplicate) {
-        checkbox.disabled = true;
+          if (item.duplicate) {
+            checkbox.disabled = true;
+          }
+
+          checkbox.onchange = (e) => {
+            if (e.target.checked) {
+              selectedImages.push({ title: titleText, imageUrl });
+            } else {
+              selectedImages = selectedImages.filter(i => i.imageUrl !== imageUrl);
+            }
+          };
+
+          card.appendChild(img);
+          card.appendChild(title);
+          card.appendChild(checkbox);
+
+          if (item.duplicate) {
+            const label = document.createElement('div');
+            label.style.marginTop = '8px';
+            label.style.color = 'red';
+            label.style.fontWeight = 'bold';
+            label.textContent = '❌ Already Exists in Shopify';
+            card.appendChild(label);
+          }
+
+          results.appendChild(card);
+        });
       }
-
-      checkbox.onchange = (e) => {
-        if (e.target.checked) {
-          selectedImages.push({ title: titleText, imageUrl });
-        } else {
-          selectedImages = selectedImages.filter(i => i.imageUrl !== imageUrl);
-        }
-      };
-
-      card.appendChild(img);
-      card.appendChild(title);
-      card.appendChild(checkbox);
-
-      if (item.duplicate) {
-        const label = document.createElement('div');
-        label.style.marginTop = '8px';
-        label.style.color = 'red';
-        label.style.fontWeight = 'bold';
-        label.textContent = '❌ Already Exists in Shopify';
-        card.appendChild(label);
-      }
-
-      results.appendChild(card);
-    });
-  }
-}
-
-
+    }
 
     function showToast(message, color = "green") {
       const toast = document.createElement("div");
@@ -193,55 +185,56 @@ function renderResults(data) {
       setTimeout(() => toast.remove(), 3000);
     }
 
-   async function addSelectedToShopify() {
-  const checkboxes = document.querySelectorAll('.image-card input[type="checkbox"]:checked');
+    async function addSelectedToShopify() {
+      const checkboxes = document.querySelectorAll('.image-card input[type="checkbox"]:checked');
 
-  if (checkboxes.length === 0) {
-    showToast("⚠️ Select at least one image", "orange");
-    return;
-  }
+      if (checkboxes.length === 0) {
+        showToast("⚠️ Select at least one image", "orange");
+        return;
+      }
 
-  for (const checkbox of checkboxes) {
-    const card = checkbox.closest('.image-card');
-    let imageUrl = card.getAttribute('data-image-url');
-    let title = card.getAttribute('data-title');
+      for (const checkbox of checkboxes) {
+        const card = checkbox.closest('.image-card');
+        let imageUrl = card.getAttribute('data-image-url');
+        let title = card.getAttribute('data-title');
 
-    // 🛡 fallback if title is empty
-    if (!title || title.trim() === '') {
-      title = 'Freepik Imported Product';
+        if (!title || title.trim() === '') {
+          title = 'Freepik Imported Product';
+        }
+
+        try {
+          const res = await fetch("/api/add-to-shopify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageUrl, title })
+          });
+
+          const data = await res.json();
+
+          checkbox.remove();
+
+          const label = document.createElement('div');
+          label.style.marginTop = '8px';
+          label.style.fontWeight = 'bold';
+          label.style.color = data.status === 'duplicate' ? 'red' : 'green';
+          label.textContent = data.status === 'duplicate'
+            ? '❌ Already Exists in Shopify'
+            : '✅ Added to Shopify';
+
+          card.appendChild(label);
+
+          if (data.status === 'added') {
+            checkbox.disabled = true;
+          }
+
+        } catch (err) {
+          showToast("❌ Upload failed.", "red");
+          console.error('Upload failed:', err);
+        }
+      }
+
+      selectedImages = [];
     }
-
-    try {
-      const res = await fetch("/api/add-to-shopify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl, title })
-      });
-
-      const data = await res.json();
-
-      checkbox.remove();
-
-      const label = document.createElement('div');
-      label.style.marginTop = '8px';
-      label.style.fontWeight = 'bold';
-      label.style.color = data.status === 'duplicate' ? 'red' : 'green';
-      label.textContent = data.status === 'duplicate'
-        ? '❌ Already Exists in Shopify'
-        : '✅ Added to Shopify';
-
-      card.appendChild(label);
-
-    } catch (err) {
-      showToast("❌ Upload failed.", "red");
-      console.error('Upload failed:', err);
-    }
-  }
-
-  selectedImages = [];
-}
-
-
 
     function nextPage() {
       search(currentPage + 1);
