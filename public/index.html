@@ -123,7 +123,7 @@
       currentPage = page;
     }
 
-    function renderResults(data) {
+function renderResults(data) {
   const results = document.getElementById('results');
   results.innerHTML = '';
   selectedImages = [];
@@ -133,7 +133,6 @@
       const card = document.createElement('div');
       card.className = 'image-card';
 
-      // ✅ Add image data attributes
       const imageUrl = item?.image?.source?.url || '';
       const titleText = item.title || 'Freepik Imported Product';
 
@@ -150,7 +149,6 @@
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
 
-      // ✅ Disable checkbox if already exists
       if (item.duplicate) {
         checkbox.disabled = true;
       }
@@ -167,7 +165,6 @@
       card.appendChild(title);
       card.appendChild(checkbox);
 
-      // ✅ Add label if it's already in Shopify
       if (item.duplicate) {
         const label = document.createElement('div');
         label.style.marginTop = '8px';
@@ -181,6 +178,7 @@
     });
   }
 }
+
 
 
     function showToast(message, color = "green") {
