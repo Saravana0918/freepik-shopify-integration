@@ -12,19 +12,16 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Allow Shopify Admin IFrame
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "frame-ancestors https://*.myshopify.com https://admin.shopify.com");
   res.setHeader('Access-Control-Allow-Origin', '*');
   next();
 });
 
-// ✅ Generate consistent short hash for image URL
 function hashImageUrl(url) {
   return 'fpimg-' + crypto.createHash('md5').update(url).digest('hex');
 }
 
-// ✅ Freepik Search + Shopify Metafield Duplicate Detection
 app.get('/api/search', async (req, res) => {
   const term = req.query.term || 'jersey';
   const page = req.query.page || 1;
@@ -39,13 +36,12 @@ app.get('/api/search', async (req, res) => {
 
     const freepikResults = freepikResponse.data?.data || [];
 
-    // ✅ Get all Freepik hashes from Shopify metafields
     let existingHashes = new Set();
-    let productsUrl = `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json?namespace=freepik&key=image_hash&limit=250`;
+    let shopifyUrl = `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json?namespace=freepik&key=image_hash&limit=250`;
     let pageCount = 0;
 
-    while (productsUrl && pageCount < 5) {
-      const shopifyRes = await axios.get(productsUrl, {
+    while (shopifyUrl && pageCount < 5) {
+      const shopifyRes = await axios.get(shopifyUrl, {
         headers: {
           'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
         }
@@ -61,7 +57,7 @@ app.get('/api/search', async (req, res) => {
       const linkHeader = shopifyRes.headers.link;
       if (linkHeader && linkHeader.includes('rel="next"')) {
         const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-        productsUrl = match?.[1] || null;
+        shopifyUrl = match?.[1] || null;
       } else {
         break;
       }
@@ -69,7 +65,6 @@ app.get('/api/search', async (req, res) => {
       pageCount++;
     }
 
-    // ✅ Mark duplicate Freepik images
     const resultsWithStatus = freepikResults.map(item => {
       const imageUrl = item?.image?.source?.url;
       const hashTag = hashImageUrl(imageUrl);
@@ -87,7 +82,6 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// ✅ Add to Shopify (with Metafield for duplicate detection)
 app.post('/api/add-to-shopify', async (req, res) => {
   let { title, imageUrl } = req.body;
 
@@ -118,29 +112,27 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     const productId = productRes.data.product.id;
 
-    // ✅ Attach metafield with image hash
     const metafieldRes = await axios.post(
-  `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
-  {
-    metafield: {
-      namespace: 'freepik',
-      key: 'image_hash',
-      value: hashTag,
-      type: 'single_line_text_field',
-      owner_id: productId,
-      owner_resource: 'product'
-    }
-  },
-  {
-    headers: {
-      'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
-      'Content-Type': 'application/json'
-    }
-  }
-);
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
+      {
+        metafield: {
+          namespace: 'freepik',
+          key: 'image_hash',
+          value: hashTag,
+          type: 'single_line_text_field',
+          owner_id: productId,
+          owner_resource: 'product'
+        }
+      },
+      {
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
-console.log('✅ Metafield created:', metafieldRes.data.metafield);
-
+    console.log('✅ Metafield created:', metafieldRes.data.metafield);
 
     res.json({ status: 'added', message: '✅ Product added to Shopify' });
 
@@ -154,7 +146,6 @@ console.log('✅ Metafield created:', metafieldRes.data.metafield);
   }
 });
 
-// Optional OAuth
 app.get('/api/auth', (req, res) => {
   const shop = req.query.shop;
   if (!shop) return res.status(400).send('Missing shop parameter');
@@ -167,7 +158,6 @@ app.get('/api/auth', (req, res) => {
   res.redirect(redirectUrl);
 });
 
-// Serve frontend
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
