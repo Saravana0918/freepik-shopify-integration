@@ -49,8 +49,8 @@ app.post('/api/add-to-shopify', async (req, res) => {
           tags: "freepik-imported",
           metafields: [
             {
-              namespace: "freepik",
-              key: "image_url",
+              namespace: "custom",
+              key: "freepik.image_url",
               type: "single_line_text_field",
               value: imageUrl
             }
@@ -76,6 +76,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
     });
   }
 });
+
 
 // OAuth install
 app.get('/api/auth', (req, res) => {
