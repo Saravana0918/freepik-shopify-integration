@@ -158,32 +158,28 @@ app.get("/api/shopify-hashes", async (req, res) => {
 
         const metafields = metafieldsRes.data.metafields || [];
 
-        // 🧠 Log all keys to see what's actually present
-        console.log(`🔍 Product ${id} metafields:`);
+        // 🔍 Log each metafield key/value
+        console.log(`🧠 Product ${id} Metafields:`);
         metafields.forEach(m => {
-          console.log(`   - ${m.namespace}:${m.key} = ${m.value}`);
+          console.log(`   ${m.key} = ${m.value}`);
         });
 
-        // ✅ TEMPORARY: match any metafield that contains a Freepik-style image URL
+        // ✅ Match the actual Freepik metafield key
         const match = metafields.find(
-          m => typeof m.value === "string" && (
-            m.value.includes("freepik") ||
-            m.value.includes("b2bpic") ||
-            m.key.includes("freepik")
-          )
+          mf => mf.key === "freepik.image_url" && typeof mf.value === "string"
         );
 
         if (match?.value) {
           const hash = crypto.createHash("md5").update(match.value).digest("hex").slice(0, 8);
-          const final = "fpimg-" + hash;
-          hashes.push(final);
-          console.log(`✅ Found image hash for product ${id}: ${final}`);
+          const tag = "fpimg-" + hash;
+          hashes.push(tag);
+          console.log(`✅ Matched product ${id}: ${tag}`);
         } else {
-          console.log(`ℹ️ No matching image metafield on product ${id}`);
+          console.log(`❌ No valid Freepik image URL on product ${id}`);
         }
 
       } catch (e) {
-        console.warn(`⚠️ Failed metafield fetch for product ${id}: ${e.message}`);
+        console.warn(`⚠️ Failed metafield fetch for product ${id}:`, e.message);
       }
     }
 
@@ -194,7 +190,6 @@ app.get("/api/shopify-hashes", async (req, res) => {
     res.status(500).json({ error: "Shopify API failed" });
   }
 });
-
 // ✅ Helper to hash Freepik image URL
 function generateHash(url) {
   return crypto.createHash('md5').update(url).digest('hex').slice(0, 8);
