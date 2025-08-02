@@ -8,192 +8,117 @@
     body {
       font-family: Arial, sans-serif;
       padding: 20px;
-      background-color: #f8f8f8;
-    }
-    h1 {
-      margin-bottom: 10px;
-    }
-    #searchTerm {
-      padding: 8px;
-      width: 200px;
-    }
-    button {
-      padding: 8px 12px;
-      margin-left: 5px;
-      background-color: #1c73e8;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #135dc2;
+      background: #f8f8f8;
     }
     .image-grid {
       display: flex;
       flex-wrap: wrap;
       gap: 20px;
-      justify-content: center;
-      margin-top: 20px;
     }
     .image-card {
-      width: 240px;
+      width: 220px;
       background: white;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      transition: transform 0.2s ease;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding-bottom: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      padding: 10px;
+      text-align: center;
       position: relative;
-    }
-    .image-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
     }
     .image-card img {
       width: 100%;
-      height: 200px;
+      height: 160px;
       object-fit: cover;
+      border-radius: 4px;
     }
-    .image-card p {
-      font-size: 14px;
-      margin: 10px 10px 0;
-      padding: 0 10px;
-      height: 40px;
-      overflow: hidden;
-      text-align: center;
+    .exists-label {
+      color: red;
+      font-size: 12px;
+      font-weight: bold;
+      margin-top: 5px;
     }
-    .image-card input[type="checkbox"] {
-      position: absolute;
-      bottom: 10px;
-      right: 12px;
-      transform: scale(1.4);
-      cursor: pointer;
+    .topbar {
+      margin-bottom: 20px;
+    }
+    button {
+      margin: 0 5px;
     }
   </style>
 </head>
 <body>
 
-  <a href="/api/auth?shop=yogireddy.myshopify.com">
-    <button style="padding: 12px 24px; font-size: 18px; background-color: green; color: white;">
-      ✅ Install Freepik App on Shopify
-    </button>
-  </a>
-
-  <h1>Freepik Images</h1>
-  <input type="text" id="searchTerm" placeholder="Enter keyword..." />
-  <button onclick="search()">Search</button>
-  <button onclick="prevPage()">⬅️ Prev</button>
-  <button onclick="nextPage()">Next ➡️</button>
-  <span id="pageNum">Page: 1</span>
-  <button onclick="addSelectedToShopify()">Add Selected to Shopify</button>
+  <div class="topbar">
+    <input id="searchTerm" placeholder="Search..." />
+    <button onclick="search()">Search</button>
+    <button onclick="addSelectedToShopify()">Add to Shopify</button>
+  </div>
 
   <div id="results" class="image-grid"></div>
 
   <script>
-    let selectedImages = [];
-    let currentPage = 1;
-    let currentTerm = '';
     let existingHashes = [];
-
-    const getRandomTerm = () => {
-      const terms = ["jersey", "sports", "tshirt", "pattern", "design", "abstract", "background"];
-      return terms[Math.floor(Math.random() * terms.length)];
-    };
+    let selectedImages = [];
 
     async function fetchShopifyHashes() {
-      try {
-        const res = await fetch('/api/shopify-hashes');
-        existingHashes = await res.json();
-      } catch (e) {
-        console.error("❌ Could not fetch Shopify hashes");
-      }
+      const res = await fetch("/api/shopify-hashes");
+      existingHashes = await res.json();
     }
 
-    async function search(page = 1) {
-      const input = document.getElementById('searchTerm');
-      const typedTerm = input.value.trim();
-      currentTerm = typedTerm || currentTerm || getRandomTerm();
-      input.value = currentTerm;
-
-      document.getElementById("pageNum").textContent = `Page: ${page}`;
-
-      const res = await fetch(`/api/search?term=${encodeURIComponent(currentTerm)}&page=${page}`);
+    async function search() {
+      const term = document.getElementById("searchTerm").value || "jersey";
+      const res = await fetch(`/api/search?term=${encodeURIComponent(term)}`);
       const data = await res.json();
-      await renderResults(data);
-      currentPage = page;
-    }
 
-    async function renderResults(data) {
-      const results = document.getElementById('results');
-      results.innerHTML = '';
+      const results = document.getElementById("results");
+      results.innerHTML = "";
       selectedImages = [];
 
-      if (data?.data?.length) {
-        for (const item of data.data) {
-          const card = document.createElement('div');
-          card.className = 'image-card';
+      for (const item of data.data || []) {
+        const url = item?.image?.source?.url;
+        const title = item.title;
+        const hash = "fpimg-" + md5(url).slice(0, 8);
 
-          const img = document.createElement('img');
-          img.src = item?.image?.source?.url || '';
-          img.alt = item.title || 'Image';
+        const card = document.createElement("div");
+        card.className = "image-card";
 
-          const title = document.createElement('p');
-          title.innerText = item.title || 'Untitled';
+        const img = document.createElement("img");
+        img.src = url;
 
-          const imageUrl = item?.image?.source?.url;
-          const hash = "fpimg-" + md5(imageUrl).slice(0, 8);
+        const p = document.createElement("p");
+        p.textContent = title;
 
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
 
-          if (existingHashes.includes(hash)) {
-            checkbox.disabled = true;
-            const existsLabel = document.createElement('div');
-            existsLabel.textContent = "❌ Already Exists in Shopify";
-            existsLabel.style = "color: red; font-size: 12px; font-weight: bold; margin-top: 5px;";
-            card.appendChild(existsLabel);
-          } else {
-            checkbox.onchange = (e) => {
-              if (e.target.checked) {
-                selectedImages.push({ title: item.title, imageUrl });
-              } else {
-                selectedImages = selectedImages.filter(i => i.imageUrl !== imageUrl);
-              }
-            };
-          }
-
-          card.appendChild(img);
-          card.appendChild(title);
-          card.appendChild(checkbox);
-          results.appendChild(card);
+        if (existingHashes.includes(hash)) {
+          checkbox.disabled = true;
+          const label = document.createElement("div");
+          label.textContent = "❌ Already Exists in Shopify";
+          label.className = "exists-label";
+          card.appendChild(label);
+        } else {
+          checkbox.onchange = () => {
+            if (checkbox.checked) {
+              selectedImages.push({ title, imageUrl: url });
+            } else {
+              selectedImages = selectedImages.filter(i => i.imageUrl !== url);
+            }
+          };
         }
-      }
-    }
 
-    function showToast(message, color = "green") {
-      const toast = document.createElement("div");
-      toast.textContent = message;
-      toast.style = `
-        position: fixed; top: 20px; right: 20px; z-index: 9999;
-        padding: 10px 18px; border-radius: 6px;
-        background:${color}; color:#fff; font-weight:600;
-        box-shadow:0 4px 12px rgba(0,0,0,.15);`;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
+        card.appendChild(img);
+        card.appendChild(p);
+        card.appendChild(checkbox);
+        results.appendChild(card);
+      }
     }
 
     async function addSelectedToShopify() {
-      if (selectedImages.length === 0) {
-        showToast("⚠️ Select at least one image", "orange");
+      if (!selectedImages.length) {
+        alert("Select at least one image");
         return;
       }
 
       const item = selectedImages[0];
-
       const res = await fetch("/api/add-to-shopify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -201,163 +126,45 @@
       });
 
       const data = await res.json();
-
       if (data.success) {
-        showToast("✅ Product added to Shopify.");
+        alert("✅ Added to Shopify");
+        await fetchShopifyHashes();
+        search();
       } else {
-        showToast("❌ Upload failed.", "red");
-        console.error(data.error || "Unknown error");
+        alert("❌ Upload failed");
+        console.error(data);
       }
-
-      selectedImages = [];
-      document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
     }
 
-    function nextPage() {
-      search(currentPage + 1);
+    function md5(str) {
+      return crypto.subtle.digest("MD5", new TextEncoder().encode(str)).then(buf => {
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+      });
     }
 
-    function prevPage() {
-      if (currentPage > 1) search(currentPage - 1);
+    // Fallback md5 if no crypto.subtle
+    function fallbackMd5(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const chr = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + chr;
+        hash |= 0;
+      }
+      return hash.toString(16).slice(0, 8);
+    }
+
+    // Force fallback for compatibility
+    function md5Compat(str) {
+      try {
+        return fallbackMd5(str);
+      } catch (e) {
+        return fallbackMd5(str);
+      }
     }
 
     window.onload = async () => {
       await fetchShopifyHashes();
-      currentTerm = getRandomTerm();
-      search(1);
     };
-
-    // ✅ Pure JavaScript MD5 hash function (no CDN)
-    function md5(str) {
-      function L(k, d) { return (k << d) | (k >>> (32 - d)); }
-      function K(G, k) {
-        var I, d, F, H, x;
-        F = (G & 2147483648);
-        H = (k & 2147483648);
-        I = (G & 1073741824);
-        d = (k & 1073741824);
-        x = (G & 1073741823) + (k & 1073741823);
-        if (I & d) return (x ^ 2147483648 ^ F ^ H);
-        if (I | d) {
-          if (x & 1073741824) return (x ^ 3221225472 ^ F ^ H);
-          else return (x ^ 1073741824 ^ F ^ H);
-        } else return (x ^ F ^ H);
-      }
-      function r(d, F, k) { return (d & F) | ((~d) & k); }
-      function q(d, F, k) { return (d & k) | (F & (~k)); }
-      function p(d, F, k) { return (d ^ F ^ k); }
-      function n(d, F, k) { return (F ^ (d | (~k))); }
-      function u(G, F, aa, Z, k, H, I) {
-        G = K(G, K(K(r(F, aa, Z), k), I));
-        return K(L(G, H), F);
-      }
-      function f(G, F, aa, Z, k, H, I) {
-        G = K(G, K(K(q(F, aa, Z), k), I));
-        return K(L(G, H), F);
-      }
-      function D(G, F, aa, Z, k, H, I) {
-        G = K(G, K(K(p(F, aa, Z), k), I));
-        return K(L(G, H), F);
-      }
-      function t(G, F, aa, Z, k, H, I) {
-        G = K(G, K(K(n(F, aa, Z), k), I));
-        return K(L(G, H), F);
-      }
-
-      function E(G) {
-        var Z;
-        var F = G.length;
-        var x = F + 8;
-        var k = (x - (x % 64)) / 64;
-        var I = (k + 1) * 16;
-        var aa = Array(I - 1);
-        var d = 0;
-        var H = 0;
-        while (H < F) {
-          Z = (H - (H % 4)) / 4;
-          d = (H % 4) * 8;
-          aa[Z] = (aa[Z] | (G.charCodeAt(H) << d));
-          H++;
-        }
-        Z = (H - (H % 4)) / 4;
-        d = (H % 4) * 8;
-        aa[Z] = aa[Z] | (0x80 << d);
-        aa[I - 2] = F << 3;
-        aa[I - 1] = F >>> 29;
-        return aa;
-      }
-
-      function B(x) {
-        var k = "", F = "", G, d;
-        for (d = 0; d <= 3; d++) {
-          G = (x >>> (d * 8)) & 255;
-          F = "0" + G.toString(16);
-          k += F.substr(F.length - 2, 2);
-        }
-        return k;
-      }
-
-      function J(k) {
-        k = k.replace(/\r\n/g, "\n");
-        var d = "";
-        for (var F = 0; F < k.length; F++) {
-          var x = k.charCodeAt(F);
-          if (x < 128) d += String.fromCharCode(x);
-          else if ((x > 127) && (x < 2048)) {
-            d += String.fromCharCode((x >> 6) | 192);
-            d += String.fromCharCode((x & 63) | 128);
-          } else {
-            d += String.fromCharCode((x >> 12) | 224);
-            d += String.fromCharCode(((x >> 6) & 63) | 128);
-            d += String.fromCharCode((x & 63) | 128);
-          }
-        }
-        return d;
-      }
-
-      var C = Array();
-      var P, h, E, v, g, Y, X, W, V;
-      str = J(str);
-      C = E(str);
-      Y = 1732584193;
-      X = 4023233417;
-      W = 2562383102;
-      V = 271733878;
-
-      for (P = 0; P < C.length; P += 16) {
-        h = Y;
-        E = X;
-        v = W;
-        g = V;
-
-        Y = u(Y, X, W, V, C[P + 0], 7, 3614090360);
-        V = u(V, Y, X, W, C[P + 1], 12, 3905402710);
-        W = u(W, V, Y, X, C[P + 2], 17, 606105819);
-        X = u(X, W, V, Y, C[P + 3], 22, 3250441966);
-        Y = u(Y, X, W, V, C[P + 4], 7, 4118548399);
-        V = u(V, Y, X, W, C[P + 5], 12, 1200080426);
-        W = u(W, V, Y, X, C[P + 6], 17, 2821735955);
-        X = u(X, W, V, Y, C[P + 7], 22, 4249261313);
-        Y = u(Y, X, W, V, C[P + 8], 7, 1770035416);
-        V = u(V, Y, X, W, C[P + 9], 12, 2336552879);
-        W = u(W, V, Y, X, C[P + 10], 17, 4294925233);
-        X = u(X, W, V, Y, C[P + 11], 22, 2304563134);
-        Y = u(Y, X, W, V, C[P + 12], 7, 1804603682);
-        V = u(V, Y, X, W, C[P + 13], 12, 4254626195);
-        W = u(W, V, Y, X, C[P + 14], 17, 2792965006);
-        X = u(X, W, V, Y, C[P + 15], 22, 1236535329);
-
-        // remaining rounds omitted here for brevity
-
-        Y = K(Y, h);
-        X = K(X, E);
-        W = K(W, v);
-        V = K(V, g);
-      }
-
-      var temp = B(Y) + B(X) + B(W) + B(V);
-      return temp.toLowerCase();
-    }
   </script>
 </body>
 </html>
