@@ -86,15 +86,14 @@ app.get('/api/search', async (req, res) => {
 
 app.post('/api/add-to-shopify', async (req, res) => {
   let { title, imageUrl } = req.body;
-
   if (!title || title.trim() === '') {
     title = 'Freepik Imported Product';
   }
 
   try {
-    // Step 1: Fetch all products with freepik tag
+    // Step 1: Check for duplicates (same as before)
     const productsRes = await axios.get(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,title,tags`,
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,tags`,
       {
         headers: {
           'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
@@ -125,23 +124,38 @@ app.post('/api/add-to-shopify', async (req, res) => {
       }
     }
 
-    // Step 2: No duplicate, create new product
-    await axios.post(
+    // Step 2: Create product
+    const productCreateRes = await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
         product: {
           title,
           status: "active",
           images: [{ src: imageUrl }],
-          tags: "freepik-imported",
-          metafields: [
-            {
-              namespace: "freepik",
-              key: "image_url",
-              type: "single_line_text_field",
-              value: imageUrl
-            }
-          ]
+          tags: "freepik-imported"
+        }
+      },
+      {
+        headers: {
+          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const productId = productCreateRes.data.product.id;
+
+    // ✅ Step 3: Add metafield separately
+    await axios.post(
+      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
+      {
+        metafield: {
+          namespace: "freepik",
+          key: "image_url",
+          value: imageUrl,
+          type: "single_line_text_field",
+          owner_id: productId,
+          owner_resource: "product"
         }
       },
       {
@@ -163,6 +177,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
     });
   }
 });
+
 
 
 
