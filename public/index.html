@@ -124,42 +124,47 @@
     }
 
     function renderResults(data) {
-      const results = document.getElementById('results');
-      results.innerHTML = '';
-      selectedImages = [];
+  const results = document.getElementById('results');
+  results.innerHTML = '';
+  selectedImages = [];
 
-      if (data?.data?.length) {
-        data.data.forEach((item) => {
-          const card = document.createElement('div');
-          card.className = 'image-card';
+  if (data?.data?.length) {
+    data.data.forEach((item) => {
+      const card = document.createElement('div');
+      card.className = 'image-card';
 
-          const img = document.createElement('img');
-          img.src = item?.image?.source?.url || '';
-          img.alt = item.title || 'Image';
+      // ✅ Add data attributes so we can use them later
+      card.setAttribute('data-image-url', item?.image?.source?.url || '');
+      card.setAttribute('data-title', item.title || 'Freepik Imported Product');
 
-          const title = document.createElement('p');
-          title.innerText = item.title || 'Untitled';
+      const img = document.createElement('img');
+      img.src = item?.image?.source?.url || '';
+      img.alt = item.title || 'Image';
 
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.onchange = (e) => {
-            if (e.target.checked) {
-              selectedImages.push({
-                title: item.title,
-                imageUrl: item?.image?.source?.url
-              });
-            } else {
-              selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
-            }
-          };
+      const title = document.createElement('p');
+      title.innerText = item.title || 'Untitled';
 
-          card.appendChild(img);
-          card.appendChild(title);
-          card.appendChild(checkbox);
-          results.appendChild(card);
-        });
-      }
-    }
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.onchange = (e) => {
+        if (e.target.checked) {
+          selectedImages.push({
+            title: item.title || 'Freepik Imported Product',
+            imageUrl: item?.image?.source?.url
+          });
+        } else {
+          selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
+        }
+      };
+
+      card.appendChild(img);
+      card.appendChild(title);
+      card.appendChild(checkbox);
+      results.appendChild(card);
+    });
+  }
+}
+
 
     function showToast(message, color = "green") {
       const toast = document.createElement("div");
@@ -173,7 +178,7 @@
       setTimeout(() => toast.remove(), 3000);
     }
 
-    async function addSelectedToShopify() {
+   async function addSelectedToShopify() {
   const checkboxes = document.querySelectorAll('.image-card input[type="checkbox"]:checked');
 
   if (checkboxes.length === 0) {
@@ -183,8 +188,13 @@
 
   for (const checkbox of checkboxes) {
     const card = checkbox.closest('.image-card');
-    const imageUrl = card.getAttribute('data-image-url');
-    const title = card.getAttribute('data-title');
+    let imageUrl = card.getAttribute('data-image-url');
+    let title = card.getAttribute('data-title');
+
+    // 🛡 fallback if title is empty
+    if (!title || title.trim() === '') {
+      title = 'Freepik Imported Product';
+    }
 
     try {
       const res = await fetch("/api/add-to-shopify", {
@@ -195,27 +205,27 @@
 
       const data = await res.json();
 
-      // Remove checkbox and show label below image
       checkbox.remove();
 
-      const statusLabel = document.createElement('div');
-      statusLabel.style.marginTop = '8px';
-      statusLabel.style.fontWeight = 'bold';
-      statusLabel.style.color = data.status === 'duplicate' ? 'red' : 'green';
-      statusLabel.textContent = data.status === 'duplicate'
+      const label = document.createElement('div');
+      label.style.marginTop = '8px';
+      label.style.fontWeight = 'bold';
+      label.style.color = data.status === 'duplicate' ? 'red' : 'green';
+      label.textContent = data.status === 'duplicate'
         ? '❌ Already Exists in Shopify'
         : '✅ Added to Shopify';
 
-      card.appendChild(statusLabel);
+      card.appendChild(label);
 
     } catch (err) {
       showToast("❌ Upload failed.", "red");
-      console.error('Error uploading:', err);
+      console.error('Upload failed:', err);
     }
   }
 
   selectedImages = [];
 }
+
 
 
     function nextPage() {
