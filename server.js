@@ -74,30 +74,32 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     // Step 2: Loop through and fetch metafields of each product
     for (const product of products) {
-      const metafieldsRes = await axios.get(
-        `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
-        {
-          headers: {
-            'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
-          }
-        }
-      );
+  await new Promise(resolve => setTimeout(resolve, 600)); // Wait 600ms between API calls
 
-      const metas = metafieldsRes.data.metafields || [];
-      const found = metas.find(m =>
-        m.namespace === "freepik" &&
-        m.key === "image_url" &&
-        m.value === imageUrl
-      );
-
-      if (found) {
-        return res.json({
-          success: false,
-          duplicate: true,
-          message: '⚠️ This image is already added as a product.'
-        });
+  const metafieldsRes = await axios.get(
+    `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
+    {
+      headers: {
+        'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
       }
     }
+  );
+
+  const metas = metafieldsRes.data.metafields || [];
+  const found = metas.find(m =>
+    m.namespace === "freepik" &&
+    m.key === "image_url" &&
+    m.value === imageUrl
+  );
+
+  if (found) {
+    return res.json({
+      success: false,
+      duplicate: true,
+      message: '⚠️ This image is already added as a product.'
+    });
+  }
+}
 
     // Step 3: If not found, create product with metafield
     await axios.post(
