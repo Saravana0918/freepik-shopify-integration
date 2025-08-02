@@ -119,25 +119,28 @@ app.post('/api/add-to-shopify', async (req, res) => {
     const productId = productRes.data.product.id;
 
     // ✅ Attach metafield with image hash
-    await axios.post(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
-      {
-        metafield: {
-          namespace: 'freepik',
-          key: 'image_hash',
-          value: hashTag,
-          type: 'single_line_text_field',
-          owner_id: productId,
-          owner_resource: 'product'
-        }
-      },
-      {
-        headers: {
-          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    const metafieldRes = await axios.post(
+  `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/metafields.json`,
+  {
+    metafield: {
+      namespace: 'freepik',
+      key: 'image_hash',
+      value: hashTag,
+      type: 'single_line_text_field',
+      owner_id: productId,
+      owner_resource: 'product'
+    }
+  },
+  {
+    headers: {
+      'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+
+console.log('✅ Metafield created:', metafieldRes.data.metafield);
+
 
     res.json({ status: 'added', message: '✅ Product added to Shopify' });
 
