@@ -33,49 +33,11 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Add image to Shopify with duplicate check
+// ✅ Always add product (no duplicate check)
 app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl } = req.body;
 
   try {
-    const existingRes = await axios.get(
-      `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json?limit=250&fields=id,title`,
-      {
-        headers: {
-          'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
-        }
-      }
-    );
-
-    const products = existingRes.data.products || [];
-
-    for (const product of products) {
-      await new Promise(resolve => setTimeout(resolve, 600)); // Shopify rate limit
-      const metafieldsRes = await axios.get(
-        `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products/${product.id}/metafields.json`,
-        {
-          headers: {
-            'X-Shopify-Access-Token': process.env.SHOPIFY_API_PASSWORD
-          }
-        }
-      );
-
-      const metas = metafieldsRes.data.metafields || [];
-      const found = metas.find(m =>
-        m.namespace === "freepik" &&
-        m.key === "image_url" &&
-        m.value === imageUrl
-      );
-
-      if (found) {
-        return res.json({
-          success: false,
-          duplicate: true,
-          message: '⚠️ This image is already added as a product.'
-        });
-      }
-    }
-
     await axios.post(
       `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2023-10/products.json`,
       {
