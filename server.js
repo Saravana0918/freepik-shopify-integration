@@ -154,15 +154,15 @@ app.get('/api/shopify-hashes', async (req, res) => {
 
       const metafields = metafieldsRes.data.metafields || [];
       const fpMeta = metafields.find(
-        mf => mf.namespace === 'freepik' && mf.key === 'image_url'
-      );
+  mf => (mf.key === 'image_url' && mf.namespace === 'freepik') || mf.key === 'freepik.image_url'
+);
 
-      if (fpMeta?.value) {
-        const hash = crypto.createHash('md5').update(fpMeta.value).digest('hex').slice(0, 8);
-        const final = "fpimg-" + hash;
-        hashes.push(final);
-        console.log(`✅ Found metafield for product ${product.id}: ${final}`);
-      }
+if (fpMeta?.value) {
+  const hash = crypto.createHash('md5').update(fpMeta.value).digest('hex').slice(0, 8);
+  const final = "fpimg-" + hash;
+  hashes.push(final);
+  console.log(`✅ Found metafield for product ${product.id}: ${final}`);
+}
     }
 
     console.log("✅ FINAL HASH LIST:", hashes);
