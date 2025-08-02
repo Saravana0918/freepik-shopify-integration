@@ -53,15 +53,6 @@
       font-size: 14px;
       margin: 6px 0 4px;
     }
-    .status {
-      margin-top: 5px;
-      font-size: 12px;
-      color: green;
-      font-weight: bold;
-    }
-    .already-exists {
-      color: red;
-    }
     input[type="checkbox"] {
       margin-top: 6px;
       transform: scale(1.2);
@@ -86,13 +77,6 @@
 
   <script>
     let currentPage = 1;
-    let existingHashes = [];
-
-    // ✅ Fetch metafield hashes from Shopify
-    async function fetchExistingHashes() {
-      const res = await fetch("/api/shopify-hashes");
-      existingHashes = await res.json(); // e.g. [ "fpimg-abc123..." ]
-    }
 
     async function searchImages() {
       const query = document.getElementById("searchTerm").value || "jersey";
@@ -115,17 +99,10 @@
       }
     }
 
-    function getShortHash(url) {
-      return 'fpimg-' + btoa(url).substring(0, 20).toLowerCase().replace(/[^a-z0-9]/g, '');
-    }
-
     function renderImages(images) {
       const grid = document.getElementById("imageGrid");
       grid.innerHTML = "";
       images.forEach(img => {
-        const shortHash = getShortHash(img.url);
-        const exists = existingHashes.includes(shortHash);
-
         const card = document.createElement("div");
         card.className = "image-card";
 
@@ -135,20 +112,13 @@
         const title = document.createElement("p");
         title.textContent = img.title;
 
-        const status = document.createElement("div");
-        status.className = "status";
-        status.textContent = exists ? "❌ Already Exists in Shopify" : "✅ Ready to Import";
-        if (exists) status.classList.add("already-exists");
-
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
-        checkbox.disabled = exists;
         checkbox.dataset.url = img.url;
         checkbox.dataset.title = img.title;
 
         card.appendChild(image);
         card.appendChild(title);
-        card.appendChild(status);
         card.appendChild(checkbox);
 
         grid.appendChild(card);
@@ -170,15 +140,10 @@
 
       const result = await res.json();
       alert(result.message || "Import completed.");
-      await fetchExistingHashes();
-      searchImages(); // re-render after import
+      searchImages(); // refresh after import
     }
 
-    // Load initial data
-    window.onload = async () => {
-      await fetchExistingHashes();
-      searchImages();
-    };
+    window.onload = searchImages;
   </script>
 </body>
 </html>
