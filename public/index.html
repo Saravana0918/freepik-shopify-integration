@@ -203,32 +203,35 @@
       setTimeout(() => toast.remove(), 3000);
     }
 
-    async function addSelectedToShopify() {
-      if (selectedImages.length === 0) {
-        showToast("⚠️ Select at least one image", "orange");
-        return;
-      }
+   async function addSelectedToShopify() {
+  if (selectedImages.length === 0) {
+    showToast("⚠️ Select at least one image", "orange");
+    return;
+  }
 
-      const item = selectedImages[0];
-      const res = await fetch("/api/add-to-shopify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item)
-      });
+  for (const item of selectedImages) {
+    const res = await fetch("/api/add-to-shopify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item)
+    });
 
-      const data = await res.json();
-      if (data.success) {
-        showToast("✅ Product added to Shopify.");
-        await fetchExistingHashes(); // update after new insert
-        search(currentPage); // re-render to reflect duplicate
-      } else {
-        showToast("❌ Upload failed.", "red");
-        console.error(data.error || "Unknown error");
-      }
+    const data = await res.json();
 
-      selectedImages = [];
-      document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+    if (data.success) {
+      showToast(`✅ Added: ${item.title}`);
+    } else {
+      showToast(`❌ Failed: ${item.title}`, "red");
+      console.error(data.error || "Unknown error");
     }
+  }
+
+  selectedImages = [];
+  document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+  await fetchExistingHashes();
+  search(currentPage);
+}
+
 
     function nextPage() {
       search(currentPage + 1);
