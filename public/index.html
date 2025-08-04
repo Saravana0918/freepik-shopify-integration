@@ -234,7 +234,7 @@
     const data = await res.json();
 
     if (data.success) {
-      showToast(`✅ Added: ${item.title}`);
+     showToast("✅ Product added to Shopify.");
       addedCount++;
     } else {
       showToast(`❌ Failed: ${item.title}`, "red");
