@@ -203,13 +203,24 @@
       setTimeout(() => toast.remove(), 3000);
     }
 
-   async function addSelectedToShopify() {
+  async function addSelectedToShopify() {
   if (selectedImages.length === 0) {
     showToast("⚠️ Select at least one image", "orange");
     return;
   }
 
+  let addedCount = 0;
+  let skippedCount = 0;
+
   for (const item of selectedImages) {
+    const hash = 'fpimg-' + (await sha1(item.imageUrl)).slice(0, 6);
+
+    if (existingHashes.includes(hash)) {
+      console.log(`⏭️ Skipping duplicate: ${item.title}`);
+      skippedCount++;
+      continue; // ❌ Don't re-upload existing ones
+    }
+
     const res = await fetch("/api/add-to-shopify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -220,10 +231,15 @@
 
     if (data.success) {
       showToast(`✅ Added: ${item.title}`);
+      addedCount++;
     } else {
       showToast(`❌ Failed: ${item.title}`, "red");
       console.error(data.error || "Unknown error");
     }
+  }
+
+  if (addedCount === 0 && skippedCount > 0) {
+    showToast("⚠️ No new items were added (already in Shopify)", "orange");
   }
 
   selectedImages = [];
