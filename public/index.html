@@ -131,7 +131,7 @@
       currentPage = page;
     }
 
-    async function renderResults(data) {
+   async function renderResults(data) {
   const results = document.getElementById('results');
   results.innerHTML = '';
   selectedImages = [];
@@ -154,13 +154,26 @@
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
 
-      // If already in Shopify, tick it and show green status
+      // Add or remove image from selectedImages based on checkbox toggle
+      checkbox.onchange = async (e) => {
+        const imageData = {
+          title: item.title,
+          imageUrl: img.src,
+          hash
+        };
+
+        if (e.target.checked) {
+          const exists = selectedImages.find(i => i.hash === hash);
+          if (!exists) selectedImages.push(imageData);
+        } else {
+          selectedImages = selectedImages.filter(i => i.hash !== hash);
+        }
+      };
+
+      // Pre-tick checkbox if already exists in Shopify
       if (isDuplicate) {
         checkbox.checked = true;
-        selectedImages.push({
-          title: item.title,
-          imageUrl: item?.image?.source?.url
-        });
+        checkbox.disabled = true;
 
         const existsTag = document.createElement("p");
         existsTag.innerText = "✅ Already Exists in Shopify";
@@ -170,16 +183,6 @@
         card.appendChild(existsTag);
         card.appendChild(checkbox);
       } else {
-        checkbox.onchange = (e) => {
-          if (e.target.checked) {
-            selectedImages.push({
-              title: item.title,
-              imageUrl: item?.image?.source?.url
-            });
-          } else {
-            selectedImages = selectedImages.filter(i => i.imageUrl !== item?.image?.source?.url);
-          }
-        };
         card.appendChild(img);
         card.appendChild(title);
         card.appendChild(checkbox);
@@ -189,6 +192,7 @@
     }
   }
 }
+
 
 
     function showToast(message, color = "green") {
