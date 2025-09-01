@@ -90,7 +90,8 @@ app.post('/api/add-to-shopify', async (req, res) => {
         title,
         body_html: "Imported from Freepik – Premium Sports Jersey.",
         vendor: "Next Print",
-        product_type: "T-Shirts",
+        product_type: "T-Shirts",       
+        custom_product_type: "Jerseys",
         status: "active",
         
         // ✅ tags: pricing scheme + freepik + hash
