@@ -89,6 +89,14 @@
   <button onclick="prevPage()">⬅️ Prev</button>
   <button onclick="nextPage()">Next ➡️</button>
   <span id="pageNum">Page: 1</span>
+
+  <!-- ✅ Dropdown for selecting price scheme -->
+  <select id="priceTagSelect" style="padding:8px; margin-left:10px;">
+    <option value="299-399">299 → 399</option>
+    <option value="499-599">499 → 599</option>
+    <option value="699-799">699 → 799</option>
+  </select>
+
   <button onclick="addSelectedToShopify()">Add Selected to Shopify</button>
 
   <div id="results" class="image-grid"></div>
@@ -131,69 +139,65 @@
       currentPage = page;
     }
 
-   async function renderResults(data) {
-  const results = document.getElementById('results');
-  results.innerHTML = '';
-  selectedImages = [];
+    async function renderResults(data) {
+      const results = document.getElementById('results');
+      results.innerHTML = '';
+      selectedImages = [];
 
-  if (data?.data?.length) {
-    for (const item of data.data) {
-      const card = document.createElement('div');
-      card.className = 'image-card';
+      if (data?.data?.length) {
+        for (const item of data.data) {
+          const card = document.createElement('div');
+          card.className = 'image-card';
 
-      const img = document.createElement('img');
-      img.src = item?.image?.source?.url || '';
-      img.alt = item.title || 'Image';
+          const img = document.createElement('img');
+          img.src = item?.image?.source?.url || '';
+          img.alt = item.title || 'Image';
 
-      const title = document.createElement('p');
-      title.innerText = item.title || 'Untitled';
+          const title = document.createElement('p');
+          title.innerText = item.title || 'Untitled';
 
-      const hash = 'fpimg-' + (await sha1(img.src)).slice(0, 6);
-      const isDuplicate = existingHashes.includes(hash);
+          const hash = 'fpimg-' + (await sha1(img.src)).slice(0, 6);
+          const isDuplicate = existingHashes.includes(hash);
 
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
 
-      // Add or remove image from selectedImages based on checkbox toggle
-      checkbox.onchange = async (e) => {
-        const imageData = {
-          title: item.title,
-          imageUrl: img.src,
-          hash
-        };
+          checkbox.onchange = async (e) => {
+            const imageData = {
+              title: item.title,
+              imageUrl: img.src,
+              hash
+            };
 
-        if (e.target.checked) {
-          const exists = selectedImages.find(i => i.hash === hash);
-          if (!exists) selectedImages.push(imageData);
-        } else {
-          selectedImages = selectedImages.filter(i => i.hash !== hash);
+            if (e.target.checked) {
+              const exists = selectedImages.find(i => i.hash === hash);
+              if (!exists) selectedImages.push(imageData);
+            } else {
+              selectedImages = selectedImages.filter(i => i.hash !== hash);
+            }
+          };
+
+          if (isDuplicate) {
+            checkbox.checked = true;
+            checkbox.disabled = true;
+
+            const existsTag = document.createElement("p");
+            existsTag.innerText = "✅ Already Exists in Shopify";
+            existsTag.style = "color: green; font-weight: bold; font-size: 13px; text-align: center;";
+            card.appendChild(img);
+            card.appendChild(title);
+            card.appendChild(existsTag);
+            card.appendChild(checkbox);
+          } else {
+            card.appendChild(img);
+            card.appendChild(title);
+            card.appendChild(checkbox);
+          }
+
+          results.appendChild(card);
         }
-      };
-
-      // Pre-tick checkbox if already exists in Shopify
-      if (isDuplicate) {
-        checkbox.checked = true;
-        checkbox.disabled = true;
-
-        const existsTag = document.createElement("p");
-        existsTag.innerText = "✅ Already Exists in Shopify";
-        existsTag.style = "color: green; font-weight: bold; font-size: 13px; text-align: center;";
-        card.appendChild(img);
-        card.appendChild(title);
-        card.appendChild(existsTag);
-        card.appendChild(checkbox);
-      } else {
-        card.appendChild(img);
-        card.appendChild(title);
-        card.appendChild(checkbox);
       }
-
-      results.appendChild(card);
     }
-  }
-}
-
-
 
     function showToast(message, color = "green") {
       const toast = document.createElement("div");
@@ -207,51 +211,55 @@
       setTimeout(() => toast.remove(), 3000);
     }
 
-  async function addSelectedToShopify() {
-  if (selectedImages.length === 0) {
-    showToast("⚠️ Select at least one image", "orange");
-    return;
-  }
+    async function addSelectedToShopify() {
+      if (selectedImages.length === 0) {
+        showToast("⚠️ Select at least one image", "orange");
+        return;
+      }
 
-  let addedCount = 0;
-  let skippedCount = 0;
+      const priceTag = document.getElementById("priceTagSelect").value; // ✅ get selected scheme
 
-  for (const item of selectedImages) {
-    const hash = 'fpimg-' + (await sha1(item.imageUrl)).slice(0, 6);
+      let addedCount = 0;
+      let skippedCount = 0;
 
-    if (existingHashes.includes(hash)) {
-      console.log(`⏭️ Skipping duplicate: ${item.title}`);
-      skippedCount++;
-      continue; // ❌ Don't re-upload existing ones
+      for (const item of selectedImages) {
+        const hash = 'fpimg-' + (await sha1(item.imageUrl)).slice(0, 6);
+
+        if (existingHashes.includes(hash)) {
+          console.log(`⏭️ Skipping duplicate: ${item.title}`);
+          skippedCount++;
+          continue;
+        }
+
+        const res = await fetch("/api/add-to-shopify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...item,
+            priceTag // ✅ send dynamic scheme
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showToast("✅ Product added to Shopify.");
+          addedCount++;
+        } else {
+          showToast(`❌ Failed: ${item.title}`, "red");
+          console.error(data.error || "Unknown error");
+        }
+      }
+
+      if (addedCount === 0 && skippedCount > 0) {
+        showToast("⚠️ No new items were added (already in Shopify)", "orange");
+      }
+
+      selectedImages = [];
+      document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+      await fetchExistingHashes();
+      search(currentPage);
     }
-
-    const res = await fetch("/api/add-to-shopify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(item)
-    });
-
-    const data = await res.json();
-
-    if (data.success) {
-     showToast("✅ Product added to Shopify.");
-      addedCount++;
-    } else {
-      showToast(`❌ Failed: ${item.title}`, "red");
-      console.error(data.error || "Unknown error");
-    }
-  }
-
-  if (addedCount === 0 && skippedCount > 0) {
-    showToast("⚠️ No new items were added (already in Shopify)", "orange");
-  }
-
-  selectedImages = [];
-  document.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
-  await fetchExistingHashes();
-  search(currentPage);
-}
-
 
     function nextPage() {
       search(currentPage + 1);
