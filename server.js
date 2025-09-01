@@ -51,27 +51,31 @@ app.get('/api/search', async (req, res) => {
 
 // ✅ Add product to Shopify with hash tag
 // ✅ Add product to Shopify with variants (sizes + price + qty)
+// ✅ Add product to Shopify with variants (sizes + price + qty + pricing tag)
 app.post('/api/add-to-shopify', async (req, res) => {
   const { title, imageUrl, priceTag } = req.body; 
-  // priceTag = "299-399" OR "499-599"
+  // priceTag = "299-399" OR "499-599" OR "699-799"
 
   try {
     // 🔑 generate hash tag to track duplicates
     const hashTag = getShortHash(imageUrl);
 
-    // ✅ price scheme
+    // ✅ price scheme logic
     let normalPrice = 299;
     let bigPrice = 399;
 
     if (priceTag === "499-599") {
       normalPrice = 499;
       bigPrice = 599;
+    } else if (priceTag === "699-799") {
+      normalPrice = 699;
+      bigPrice = 799;
     }
 
     // ✅ sizes
     const sizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
-    // ✅ variants (different price for 3XL)
+    // ✅ variants (with same stock = 100 for all)
     const variants = sizes.map(size => ({
       option1: size,
       price: size === "3XL" ? bigPrice.toString() : normalPrice.toString(),
@@ -82,35 +86,35 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     // ✅ full product data
     const productData = {
-  product: {
-    title,
-    body_html: "Imported from Freepik – Premium Sports Jersey.",
-    vendor: "Next Print",
-    product_type: "T-Shirts",
-    status: "active",
-    tags: `freepik-imported,${hashTag},${priceTag}`,
-    
-    // ✅ FIXED OPTIONS FORMAT
-    options: [
-      {
-        name: "Size",
-        values: sizes
-      }
-    ],
+      product: {
+        title,
+        body_html: "Imported from Freepik – Premium Sports Jersey.",
+        vendor: "Next Print",
+        product_type: "T-Shirts",
+        status: "active",
+        
+        // ✅ tags: pricing scheme + freepik + hash
+        tags: `freepik-imported,pricing:${priceTag},${hashTag}`,
 
-    variants,
-    images: [{ src: imageUrl }],
-    metafields: [
-      {
-        namespace: "freepik",
-        key: "image_url",
-        type: "single_line_text_field",
-        value: imageUrl
-      }
-    ]
-  }
-};
+        options: [
+          {
+            name: "Size",
+            values: sizes
+          }
+        ],
 
+        variants,
+        images: [{ src: imageUrl }],
+        metafields: [
+          {
+            namespace: "freepik",
+            key: "image_url",
+            type: "single_line_text_field",
+            value: imageUrl
+          }
+        ]
+      }
+    };
 
     // ✅ Shopify API call
     await axios.post(
@@ -135,6 +139,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
     });
   }
 });
+
 
 
 // ✅ Return all existing hash tags from Shopify products
