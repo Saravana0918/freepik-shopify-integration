@@ -77,7 +77,7 @@ app.post('/api/add-to-shopify', async (req, res) => {
       price: size === "3XL" ? bigPrice.toString() : normalPrice.toString(),
       sku: `JERSEY-${size}`,
       inventory_management: "shopify",
-      inventory_quantity: size === "3XL" ? 5 : 10
+      inventory_quantity: 100
     }));
 
     // ✅ full product data
