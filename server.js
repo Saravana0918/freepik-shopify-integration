@@ -82,26 +82,35 @@ app.post('/api/add-to-shopify', async (req, res) => {
 
     // ✅ full product data
     const productData = {
-      product: {
-        title,
-        body_html: "Imported from Freepik – Premium Sports Jersey.", // ✅ description
-        vendor: "Next Print",
-        product_type: "T-Shirts",
-        status: "active",
-        tags: `freepik-imported,${hashTag},${priceTag}`, // ✅ useful tags
-        options: ["Size"], // ✅ size option
-        variants,
-        images: [{ src: imageUrl }],
-        metafields: [
-          {
-            namespace: "freepik",
-            key: "image_url",
-            type: "single_line_text_field",
-            value: imageUrl
-          }
-        ]
+  product: {
+    title,
+    body_html: "Imported from Freepik – Premium Sports Jersey.",
+    vendor: "Next Print",
+    product_type: "T-Shirts",
+    status: "active",
+    tags: `freepik-imported,${hashTag},${priceTag}`,
+    
+    // ✅ FIXED OPTIONS FORMAT
+    options: [
+      {
+        name: "Size",
+        values: sizes
       }
-    };
+    ],
+
+    variants,
+    images: [{ src: imageUrl }],
+    metafields: [
+      {
+        namespace: "freepik",
+        key: "image_url",
+        type: "single_line_text_field",
+        value: imageUrl
+      }
+    ]
+  }
+};
+
 
     // ✅ Shopify API call
     await axios.post(
